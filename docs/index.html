@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f3f6f1">
+  <title>Профкурс — выбор профессии</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./config.js" defer></script>
+  <script src="https://telegram.org/js/telegram-web-app.js" async></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="mast-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Профкурс</div>
+      <button class="theme-button" id="theme" type="button" aria-label="Включить тёмную тему" title="Включить тёмную тему"><span class="theme-icon" aria-hidden="true"></span></button>
+    </div>
+  </header>
+  <main class="layout">
+    <aside class="chart" aria-label="Маршрут анкеты">
+      <div class="chart-copy">
+        <div class="stage-count" id="stage-count">Шаг 1 из 6</div>
+        <p class="chart-title" id="stage-name">Отправная точка</p>
+      </div>
+      <nav class="dial" aria-label="Перейти к пройденному шагу">
+        <div class="dial-face" aria-hidden="true"></div>
+        <div class="dial-needle" aria-hidden="true"><i></i></div>
+        <div id="stations"></div>
+      </nav>
+      <div class="chart-footer" aria-hidden="true"><span class="mini-trail"></span><span id="chart-footnote">Подбор профессии</span></div>
+    </aside>
+    <section class="question-panel" id="panel" aria-labelledby="question">
+      <noscript>Включите JavaScript, чтобы пройти анкету и подобрать профессию.</noscript>
+    </section>
+  </main>
+</body>
+</html>

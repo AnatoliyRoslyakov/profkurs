@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<style>
+  * { box-sizing: border-box }
+  body { margin: 0; padding: 16px; color: var(--tg-theme-text-color) }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+  .brand { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--tg-theme-accent-text-color) }
+  .step { font-size: .85em; color: var(--tg-theme-hint-color) }
+  h2 { margin: 12px 0; font-size: 1.3em; line-height: 1.15 }
+  #choices { display: grid; gap: 5px }
+  button { min-height: 40px; font: inherit }
+  .choice { width: 100%; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 8px 12px; border: 1px solid transparent; border-radius: 10px;
+    text-align: left; background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color) }
+  .choice.chosen { border-color: var(--tg-theme-button-color); font-weight: 600 }
+  .mark { color: var(--tg-theme-link-color) }
+  #footer { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px }
+  #back { padding: 5px 6px; background: transparent; color: var(--tg-theme-link-color); border: 0 }
+  #open { flex: 1; padding: 7px 10px }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path d="m17.5 6.5-3.6 7.4-7.4 3.6 3.6-7.4z" fill="currentColor"/>
+    </svg>
+    Профкурс
+  </span>
+  <span class="step" id="step"></span>
+</header>
+<h2 id="question"></h2>
+<div id="choices"></div>
+<div id="footer">
+  <button id="back">Назад</button>
+  <button id="open">Продолжить в приложении</button>
+</div>
+<script>
+  const statuses = ['Работаю', 'Учусь', 'Ищу новое дело'];
+  const activities = ['Мастерить и чинить', 'Анализировать данные', 'Придумывать и создавать',
+    'Помогать людям', 'Вести за собой команду', 'Планировать и упорядочивать'];
+  const byId = (id) => document.getElementById(id);
+  let status = -1;
+  let interest = -1;
+  let step = 1;
+
+  function draw() {
+    const first = step === 1;
+    byId('step').textContent = 'Шаг ' + step + ' из 2';
+    byId('question').textContent = first ? 'С чего вы начинаете?' : 'Что вам интереснее делать?';
+    byId('footer').style.display = first ? 'none' : 'flex';
+    byId('open').disabled = interest < 0;
+    const choices = (first ? statuses : activities).map((name, index) => {
+      const selected = (first ? status : interest) === index;
+      const button = document.createElement('button');
+      button.className = selected ? 'choice chosen' : 'choice';
+      button.textContent = name;
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.textContent = selected ? '✓' : first ? '›' : '○';
+      button.appendChild(mark);
+      button.onclick = () => {
+        if (first) {
+          if (status !== index) interest = -1;
+          status = index;
+          step = 2;
+        } else {
+          interest = index;
+        }
+        draw();
+      };
+      return button;
+    });
+    byId('choices').replaceChildren(...choices);
+  }
+
+  byId('back').onclick = () => { step = 1; draw(); };
+  byId('open').onclick = () => {
+    if (interest >= 0 && window.TelegramWidget) {
+      window.TelegramWidget.openTelegramLink('https://t.me/__BOT_USERNAME__?startapp=route1_' + status + '_' + interest);
+    }
+  };
+  draw();
+  if (window.TelegramWidget) window.TelegramWidget.ready();
+</script>
+</body>
+</html>
