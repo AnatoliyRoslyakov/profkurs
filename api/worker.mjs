@@ -1,3 +1,4 @@
+import { handleTelegram } from "../telegram/bot.mjs";
 import { choices } from "../docs/options.js";
 
 const endpoint = "https://api.deepseek.com/chat/completions";
@@ -91,9 +92,7 @@ function reply(status, payload, origin, extra = {}) {
   return new Response(JSON.stringify(payload), { status, headers });
 }
 
-async function permit(request, env) {
-  // Only the edge-provided header identifies a client. Unidentified clients share a counter.
-  const address = request.headers.get("CF-Connecting-IP") || "unknown";
+async function permit(address, env) {
   const encoder = new TextEncoder();
   const mac = await crypto.subtle.importKey("raw", encoder.encode(env.DEEPSEEK_API_KEY),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -181,9 +180,23 @@ async function recommend(profile, secret, signal) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const origin = allowedOrigin(request, env.ALLOWED_ORIGINS);
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/telegram/")) {
+      const generate = async profile => {
+        if (!validProfile({version:2,profile})) throw new Error("Invalid profile");
+        const aborter = new AbortController();
+        const timer = setTimeout(() => aborter.abort(), 45_000);
+        try { return await recommend(profile, env.DEEPSEEK_API_KEY, aborter.signal); }
+        finally { clearTimeout(timer); }
+      };
+      try {
+        return await handleTelegram(request, env, ctx, generate, id => permit("telegram/" + id, env));
+      } catch {
+        return new Response("Временная ошибка подключения. Попробуйте ещё раз.", {status:503});
+      }
+    }
     if (!["/recommend", "/api/recommend"].includes(url.pathname) || url.search) {
       return reply(404, { error: "Адрес не найден." }, origin);
     }
@@ -221,7 +234,7 @@ export default {
       if (!validProfile(body)) throw invalid;
       received = true;
       try {
-        if (!await permit(request, env)) {
+        if (!await permit(request.headers.get("CF-Connecting-IP") || "unknown", env)) {
           return reply(429, { error: "Слишком много запросов. Попробуйте через минуту." }, origin, { "Retry-After": "60" });
         }
       } catch {

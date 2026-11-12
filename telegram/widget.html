@@ -1,97 +1,88 @@
-<!doctype html>
-<html lang="ru">
-<head>
 <style>
-  * { box-sizing: border-box }
-  body { margin: 0; padding: 16px; color: var(--tg-theme-text-color) }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 8px }
-  .brand { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--tg-theme-accent-text-color) }
-  .step { font-size: .85em; color: var(--tg-theme-hint-color) }
-  h2 { margin: 12px 0; font-size: 1.3em; line-height: 1.15 }
-  #choices { display: grid; gap: 5px }
-  button { min-height: 40px; font: inherit }
-  .choice { width: 100%; display: flex; align-items: center; justify-content: space-between;
-    gap: 8px; padding: 8px 12px; border: 1px solid transparent; border-radius: 10px;
-    text-align: left; background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color) }
-  .choice.chosen { border-color: var(--tg-theme-button-color); font-weight: 600 }
-  .mark { color: var(--tg-theme-link-color) }
-  #footer { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px }
-  #back { padding: 5px 6px; background: transparent; color: var(--tg-theme-link-color); border: 0 }
-  #open { flex: 1; padding: 7px 10px }
+body{padding:12px;margin:0}small{color:var(--tg-theme-hint-color)}h3{margin:7px 0}p{margin:7px 0;line-height:1.3}button{min-height:32px;margin:2px;padding:5px 9px}#choices button{display:block;width:100%;text-align:left}#nav{margin-top:5px}
 </style>
-</head>
-<body>
-<header>
-  <span class="brand">
-    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
-      <path d="m17.5 6.5-3.6 7.4-7.4 3.6 3.6-7.4z" fill="currentColor"/>
-    </svg>
-    Профкурс
-  </span>
-  <span class="step" id="step"></span>
-</header>
-<h2 id="question"></h2>
-<div id="choices"></div>
-<div id="footer">
-  <button id="back">Назад</button>
-  <button id="more">Ещё занятия</button>
-  <button id="open">Продолжить в приложении</button>
-</div>
+<small id="label">Профкурс</small><h3 id="title">Подбор профессий</h3><p id="text"></p><div id="choices"></div><div id="nav"></div>
 <script>
-  const statuses = ['Работаю', 'Учусь', 'Ищу новое дело'];
-  const activities = ['Мастерить и чинить', 'Анализировать данные', 'Придумывать и создавать',
-    'Помогать людям', 'Вести за собой команду', 'Планировать и упорядочивать',
-    'Работать перед камерой', 'Заботиться о природе и животных', 'Готовить и придумывать вкусы',
-    'Строить и ремонтировать', 'Обучать и объяснять', 'Организовывать поездки и события'];
-  const byId = (id) => document.getElementById(id);
-  let status = -1;
-  let interest = -1;
-  let step = 1;
-  let offset = 0;
-
-  function draw() {
-    const first = step === 1;
-    byId('step').textContent = 'Шаг ' + step + ' из 2';
-    byId('question').textContent = first ? 'С чего вы начинаете?' : 'Что вам интереснее делать?';
-    byId('footer').style.display = first ? 'none' : 'flex';
-    byId('open').disabled = interest < 0;
-    byId('more').textContent = offset ? 'Предыдущие занятия' : 'Ещё занятия';
-    const choices = (first ? statuses : activities.slice(offset, offset + 6)).map((name, localIndex) => {
-      const index = first ? localIndex : offset + localIndex;
-      const selected = (first ? status : interest) === index;
-      const button = document.createElement('button');
-      button.className = selected ? 'choice chosen' : 'choice';
-      button.textContent = name;
-      const mark = document.createElement('span');
-      mark.className = 'mark';
-      mark.textContent = selected ? '✓' : first ? '›' : '○';
-      button.appendChild(mark);
-      button.onclick = () => {
-        if (first) {
-          if (status !== index) interest = -1;
-          status = index;
-          offset = interest >= 6 ? 6 : 0;
-          step = 2;
-        } else {
-          interest = index;
-        }
-        draw();
-      };
-      return button;
-    });
-    byId('choices').replaceChildren(...choices);
-  }
-
-  byId('more').onclick = () => { offset = offset ? 0 : 6; draw(); };
-  byId('back').onclick = () => { step = 1; draw(); };
-  byId('open').onclick = () => {
-    if (interest >= 0 && window.TelegramWidget) {
-      window.TelegramWidget.openTelegramLink('https://t.me/__BOT_USERNAME__?startapp=route1_' + status + '_' + interest);
-    }
-  };
-  draw();
-  if (window.TelegramWidget) window.TelegramWidget.ready();
+const Q=__QUESTIONS__,groups=__GROUPS__,W=window.TelegramWidget;
+const $=id=>document.getElementById(id);
+let step=0, answers=[], interests=[], offset=0, group=-1, list=[], role=-1, section=-1, detail='', status='', job='', busy=false, serial=0;
+const perPage=3;
+try {
+ const saved=JSON.parse(localStorage.getItem('quiz')||'null');
+ if(saved){step=saved.step;answers=saved.answers;interests=saved.interests;job=saved.job}
+} catch(e){}
+function save(){try{localStorage.setItem('quiz',JSON.stringify({step,answers,interests,job}))}catch(e){}}
+function state(){try{return JSON.parse(W.chatData||'null')}catch(e){return null}}
+function btn(where,text,fn){const b=document.createElement('button');b.textContent=text;b.onclick=fn;$(where).appendChild(b)}
+function go(n){step=n;offset=0;group=-1;status='';save();draw()}
+function reset(){answers=[];interests=[];job='';role=-1;section=-1;go(0)}
+function paged(items,action,multi){
+ const end=Math.min(offset+perPage,items.length);
+ for(let i=offset;i<end;i++){const item=items[i];btn('choices',(multi&&interests.includes(item[0])?'✓ ':'')+(multi?item[1]:item),()=>action(i))}
+ if(offset)btn('nav','‹ Ещё',()=>{offset-=perPage;draw()});
+ if(end<items.length)btn('nav','Ещё ›',()=>{offset+=perPage;draw()});
+}
+async function ask(data,done){
+ if(busy)return;
+ const id=++serial;busy=true;status='Загрузка…';draw();
+ try{const a=await W.request(data);if(id!==serial)return;const v=JSON.parse(a.result);if(v.error)throw Error(v.error);status='';done(v)}
+ catch(e){if(id===serial)status=e.message&&e.name==='Error'?e.message:'Не удалось загрузить. Попробуйте снова.'}
+ finally{if(id===serial){busy=false;save();draw()}}
+}
+function submit(){
+ if(!job)job=Date.now().toString(36);
+ const wire=Q.map((_,i)=>(answers[i]||0).toString(36)).join('');
+ save();ask('s:'+job+':'+wire+':'+interests.map(x=>x.toString(36)).join('.'),()=>{step=Q.length+1;save()});
+}
+const parts=['Почему подходит','Рабочий день','Специализации','С чего начать'];
+function showPart(r,p){ask('r:'+job+':'+r+':'+p,v=>{role=r;section=p;detail=v.text})}
+function draw(){
+ const data=state();$('choices').replaceChildren();$('nav').replaceChildren();$('text').textContent=status;
+ $('label').textContent='Профкурс';
+ if(step>Q.length && data && data.job===job && data.titles){
+   $('title').textContent=role<0?'Ваши три профессии':data.titles[role];
+   if(busy)return;
+   if(role<0){
+     data.titles.forEach((t,i)=>btn('choices',t,()=>showPart(i,0)));
+     btn('choices','Как совместить интересы',()=>showPart(3,0));
+     if(section===0&&detail)$('text').textContent=detail;
+     btn('nav','Пройти заново',()=>ask('x:'+job,reset));
+   }else{
+     if(role===3)$('title').textContent='Как совместить интересы';
+     $('text').textContent=status||detail;
+     if(role!==3)parts.forEach((t,i)=>{if(i!==section)btn('choices',t,()=>showPart(role,i))});
+     btn('nav','К профессиям',()=>{role=-1;section=-1;detail='';status='';draw()});
+   }
+   return;
+ }
+ if(step>=Q.length){
+   const waiting=step>Q.length;
+   $('title').textContent=waiting?'Подбираем профессии':'Получить подборку?';
+   $('text').textContent=status||(waiting?'Результат появится здесь.':'Ответы получит DeepSeek. В карточке появятся три профессии.');
+   if(!busy){
+     if(waiting){if(data&&data.job===job&&data.error)$('text').textContent=data.error;btn('nav','Проверить результат',()=>ask('p:'+job,v=>{if(v.error)status=v.error;else if(v.wait)status='Подбор ещё идёт.'}))}
+     if(!waiting||(data&&data.job===job&&data.error))btn('nav',waiting?'Повторить':'Подобрать профессии',()=>{if(waiting)job='';submit()});
+     btn('nav','К ответам',()=>{job='';go(Q.length-1)});
+   }
+   return;
+ }
+ $('label').textContent='Профкурс · '+(step+1)+' из '+Q.length;
+ $('title').textContent=Q[step][0];
+ if(busy)return;
+ if(step===3){
+   $('text').textContent=status||('Выберите до четырёх занятий · '+interests.length+' из 4');
+   if(group<0)paged(groups,i=>ask('i:'+i,v=>{group=i;list=v.items;offset=0}),false);
+   else{paged(list,i=>{const n=list[i][0];status='';if(interests.includes(n))interests=interests.filter(x=>x!==n);else if(interests.length<4)interests.push(n);else status='Уже выбрано четыре занятия.';save();draw()},true);
+     btn('nav','К сферам',()=>{group=-1;offset=0;draw()});}
+   if(interests.length)btn('nav','Дальше',()=>go(step+1));
+ }else{paged(Q[step][1],i=>{answers[step]=i;go(step+1)},false)}
+ if(step)btn('nav','Назад',()=>go(step-1));
+}
+W.onEvent('chatDataChanged',()=>{
+ const d=state();
+ if(d&&d.job===job&&d.titles){step=Q.length+1;save()}
+ draw();
+});
+const initial=state();if(!job&&step===0&&initial&&initial.titles&&!answers.length){job=initial.job;step=Q.length+1}
+draw();W.ready();
 </script>
-</body>
-</html>

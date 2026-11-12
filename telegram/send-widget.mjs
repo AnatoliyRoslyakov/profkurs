@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
+import { cardHtml } from './schema.mjs';
 
 const usage = 'Node.js 18+ · node telegram/send-widget.mjs CHAT_ID\n' +
   'Укажите числовой ID личного чата с ботом и задайте TELEGRAM_BOT_TOKEN в окружении.';
@@ -36,22 +37,16 @@ async function send() {
   }
 
   const bot = await call('getMe');
-  if (!bot.has_main_web_app) {
-    throw new Error('Подключите основное Mini App к этому боту в @BotFather, чтобы ссылка открывала «Профкурс».');
-  }
-  if (!/^[A-Za-z0-9_]{1,32}$/.test(bot.username || '')) {
-    throw new Error('Telegram не вернул имя пользователя бота.');
-  }
+  if (bot.username?.toLowerCase() !== 'prof0bot') throw new Error('Нужен токен @prof0bot.');
   const template = await readFile(new URL('widget.html', import.meta.url), 'utf8');
-  const html = template.replace('__BOT_USERNAME__', bot.username);
+  const html = cardHtml(template);
   if (Buffer.byteLength(html) > 32768 || deflateSync(html, { level: 9 }).length > 4096) {
     throw new Error('HTML превышает лимит размера виджета Telegram.');
   }
   const message = await call('sendWidget', {
     chat_id: chatId,
     html,
-    caption: `<a href="https://t.me/${bot.username}?startapp">Открыть «Профкурс» с начала</a>`,
-    parse_mode: 'HTML'
+    caption: 'Профкурс · карьерный подбор', width: 320, height: 540, allow_queries: true
   });
   console.log(`Виджет отправлен. ID сообщения: ${message.message_id}`);
 }
