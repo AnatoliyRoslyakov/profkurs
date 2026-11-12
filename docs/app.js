@@ -308,6 +308,7 @@ function renderForm() {
     form.append(makeField("hoursPerWeek", "Часов в неделю", true), makeField("months", "Месяцев на обучение", true), makeField("effort", "В каком темпе?"));
   } else {
     form.append(makeField("complexity", "Сложность задач", true), makeField("immersion", "Цель обучения"));
+    form.append(el("p", "scale-caption", "По кнопке «Подобрать профессию» ваши ответы получит DeepSeek."));
   }
   const actions = el("div", step ? "actions" : "actions solo");
   if (step) actions.append(button("Назад", back, "secondary", "back"));
