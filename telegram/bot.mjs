@@ -107,6 +107,22 @@ async function handleQuery(query, token, env, generate, allowed) {
     await telegramCall(token,"editMessageWidgetData",{chat_id:chatId,message_id:messageId,chat_data:""}).catch(()=>{});
     return answer({ok:true});
   }
+  if (op==="d" && args.length===4 && record?.job===job && record.status==="ready" && /^[0-3]$/.test(one) && /^[0-3]$/.test(two)) {
+    const route = record.result.directions[Number(one)];
+    const sections = route ? [route.why,route.environment,route.branches,route.firstStep] : [record.result.connection];
+    const requested = sections[two];
+    if (requested === undefined) return answer({error:"Раздел не найден."});
+    const payload = { [two]: requested };
+    const fits = value => encoder.encode(JSON.stringify(value)).length <= 1024;
+    if (typeof requested === "string" && !fits(payload)) {
+      let chars = Array.from(requested);
+      while (!fits(payload)) { chars.pop(); payload[two] = chars.join("")+"…"; }
+    }
+    for (const i of [2,0,1,3]) {
+      if (sections[i] !== undefined && !(i in payload) && fits({...payload,[i]:sections[i]})) payload[i] = sections[i];
+    }
+    return answer(payload);
+  }
   if (op==="r" && args.length===4 && record?.job===job && record.status==="ready" && /^[0-3]$/.test(one) && /^[0-3]$/.test(two)) {
     const route=record.result.directions[Number(one)];
     const text=one==="3" ? record.result.connection : [route.why,route.environment,route.branches.join(" · "),route.firstStep][Number(two)];

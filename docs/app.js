@@ -1,4 +1,4 @@
-import { choices, generalInterests, interestGroups } from "./options.js?v=3";
+import { choices, generalInterests, interestGroups, routeRanks } from "./options.js?v=4";
 
 const stages = [
   ["Отправная точка", "Чем вы сейчас занимаетесь?", "По вашим ответам подберём три профессии и покажем, как можно сочетать ваши интересы."],
@@ -19,9 +19,7 @@ const prompts = {
   effort: "Выберите комфортную нагрузку.", complexity: "Выберите сложность задач.", immersion: "Выберите цель обучения."
 };
 const complexityLabels = ["Простые задачи с понятными шагами", "Знакомые задачи с небольшим вызовом", "Задачи, в которых нужно разобраться", "Сложные задачи с поиском решения", "Открытые задачи с высокой неопределённостью"];
-const positions = [[50,8],[86.4,29],[86.4,71],[50,92],[13.6,71],[13.6,29]];
 const panel = document.getElementById("panel");
-const dial = document.querySelector(".dial");
 const stations = document.getElementById("stations");
 const themeButton = document.getElementById("theme");
 const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -38,6 +36,7 @@ let step = 0;
 let furthest = 0;
 let page = "form";
 let result = null;
+let openedRole = null;
 let failure = "";
 let pending = null;
 let telegram = null;
@@ -94,6 +93,7 @@ function applyStartParam(value) {
 }
 
 function back() {
+  if (page === "result" && openedRole !== null) { showRole(null); return; }
   if (page !== "form") {
     if (pending) pending.abort();
     pending = null;
@@ -131,33 +131,24 @@ function navigate(next) {
 function restart() {
   profile = blankProfile();
   result = null;
+  openedRole = null;
   failure = "";
   furthest = 0;
   detailsOpen = false;
   navigate(0);
 }
 
-function refreshDial() {
-  const current = page === "form" ? step : stages.length - 1;
-  const adjustment = page === "form" ? stageFields[step].reduce((sum, key) => {
-    const answer = profile[key];
-    if (Array.isArray(answer)) return sum + answer.length * 2;
-    return sum + Math.max(0, choices[key].indexOf(answer) + 1);
-  }, 0) : 0;
-  dial.style.setProperty("--bearing", (current * 60 + Math.min(8, adjustment)) + "deg");
-}
-
 function updateChart() {
-  document.getElementById("stage-count").textContent = page === "form" ? `Шаг ${step + 1} из ${stages.length}` : "Маршрут пройден";
-  const suffix = { loading: "Подбор профессии", error: "Ваши ответы", result: "Рекомендация" };
-  document.getElementById("stage-name").textContent = page === "form" ? stages[step][0] : suffix[page];
-  document.getElementById("chart-footnote").textContent = "К пройденному шагу можно вернуться по номеру";
+  const inForm = page === "form";
+  const status = {loading:"Сравниваем ответы", error:"Подбор приостановлен", result:"Подборка готова"};
+  document.getElementById("stage-count").textContent = inForm ? `Шаг ${step + 1} из ${stages.length}` : status[page];
+  document.getElementById("stage-name").textContent = inForm ? stages[step][0] :
+    page === "result" ? (openedRole === null ? "3 профессии" : routeRanks[openedRole] ?? "Сочетание профессий") : "";
+  stations.hidden = !inForm;
   stations.replaceChildren();
   stages.forEach(([name], index) => {
-    const node = el("button", "station", String(index + 1));
+    const node = el("button", "station" + (index <= step ? " filled" : ""));
     node.type = "button";
-    node.style.setProperty("--x", positions[index][0] + "%");
-    node.style.setProperty("--y", positions[index][1] + "%");
     node.title = `Шаг ${index + 1}. ${name}`;
     node.setAttribute("aria-label", node.title);
     node.disabled = index > furthest || page === "loading";
@@ -165,7 +156,7 @@ function updateChart() {
     node.addEventListener("click", () => navigate(index));
     stations.append(node);
   });
-  refreshDial();
+
   if (telegram?.isVersionAtLeast?.("6.1")) {
     if (page === "form" && step === 0) telegram.BackButton?.hide();
     else telegram.BackButton?.show();
@@ -211,7 +202,7 @@ function interestField() {
     touched = true;
     clearFeedback();
     update();
-    refreshDial();
+
     haptic();
   }
   count.tabIndex = -1;
@@ -275,7 +266,7 @@ function makeField(key, title = "", segments = false) {
       profile[key] = value;
       if (key === "complexity") field.querySelector(".scale-caption").textContent = complexityLabels[index];
       clearFeedback();
-      refreshDial();
+
       haptic();
     });
     options.append(row);
@@ -413,6 +404,11 @@ function renderForm() {
   panel.append(form);
 }
 
+function showRole(index) {
+  openedRole = index;
+  render(true);
+}
+
 function renderOutcome() {
   const actions = el("div", "actions");
   if (page === "loading") {
@@ -423,25 +419,43 @@ function renderOutcome() {
     heading(panel, "Подбор пока не завершён", failure);
     actions.append(button("К ответам", back, "secondary", "back"), button("Повторить", submitProfile));
   } else {
-    heading(panel, "Какие профессии вам подходят");
-    result.directions.forEach((route, index) => {
-      const card = el("details", "career-route");
-      card.open = index === 0;
-      const summary = el("summary");
-      summary.append(el("span", "", route.profession));
-      card.append(summary, el("p", "route-why", route.why), el("h3", "", "Как выглядит рабочий день"),
-        el("p", "", route.environment), el("h3", "", "Специализации"));
-      const branches = el("ul", "route-branches");
-      for (const branch of route.branches) branches.append(el("li", "", branch));
-      const start = el("div", "first-step");
-      start.append(el("h3", "", "С чего можно начать"), el("p", "", route.firstStep));
-      card.append(branches, start);
-      panel.append(card);
-    });
-    const mix = el("section", "result-block");
-    mix.append(el("h2", "", "Как совместить интересы"), el("p", "", result.connection));
-    panel.append(mix);
-    actions.append(button("Изменить ответы", () => navigate(0)), button("Начать заново", restart, "secondary"));
+    if (openedRole === null) {
+      heading(panel, "Три профессии для вас", "Первая ближе всего к вашим ответам. Две другие показывают, где ещё пригодятся ваши интересы и навыки.");
+      const list = el("div", "route-list");
+      result.directions.forEach((route, index) => {
+        const entry = el("button", "route-link");
+        entry.type = "button";
+        const copy = el("span", "route-copy");
+        copy.append(el("small", "", routeRanks[index]), el("strong", "", route.profession));
+        const arrow = el("span", "arrow");
+        arrow.setAttribute("aria-hidden", "true");
+        entry.append(copy, arrow);
+        entry.onclick = () => showRole(index);
+        list.append(entry);
+      });
+      panel.append(list, button("Как совместить эти профессии", () => showRole(3), "mix", "forward"));
+      actions.append(button("Изменить ответы", () => navigate(0), "secondary"), button("Начать заново", restart, "secondary"));
+    } else {
+      if (openedRole === 3) {
+        heading(panel, "Как совместить эти профессии");
+        panel.append(el("p", "reason", result.connection));
+      } else {
+        const route = result.directions[openedRole];
+        heading(panel, route.profession);
+        const why = el("section", "reason");
+        why.append(el("h2", "", "Почему вам подходит"), el("p", "", route.why));
+        const topics = el("div", "topics");
+        const branches = el("ul", "branch-list");
+        route.branches.forEach(name => branches.append(el("li", "", name)));
+        for (const [title, content] of [["Специализации", branches], ["Рабочий день", el("p", "", route.environment)], ["С чего начать", el("p", "", route.firstStep)]]) {
+          const topic = el("details", "topic");
+          topic.append(el("summary", "", title), content);
+          topics.append(topic);
+        }
+        panel.append(why, topics);
+      }
+      actions.append(button("К трём профессиям", () => showRole(null), "secondary", "back"));
+    }
   }
   panel.append(actions);
 }
@@ -514,6 +528,7 @@ async function submitProfile() {
     if (pending !== controller) return;
     if (!responseIsValid(data)) { showFailure("Сервис вернул неполную рекомендацию. Повторите подбор с теми же ответами."); return; }
     result = data;
+    openedRole = null;
     page = "result";
     render(true);
   } catch {

@@ -1,43 +1,45 @@
 <style>
 *{box-sizing:border-box}
-body{margin:0;padding:0;color-scheme:light dark;background:light-dark(#f3f6f1,#152421);color:light-dark(#173632,#edf5e9);font:15px/1.3 system-ui}
-header{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0c434c;color:#eef7e6;padding:13px 16px}
-small{display:block;color:#c2dbce;font-size:12px;font-weight:600}
-h3{font-size:19px;margin:3px 0 8px}
-.track{height:3px;background:#42676b;width:100%;border-radius:2px}
-#progress{height:3px;background:#d4f6ac}
-svg{width:66px;height:66px;flex:none}
+body{margin:0;color-scheme:light dark;background:light-dark(#f3f6f1,#152421);color:light-dark(#173632,#edf5e9);font:15px/1.3 system-ui}
+header{padding:9px 14px 0}
+small{display:block;font-size:12px;font-weight:600}
+.track{margin-top:5px;height:3px;background:light-dark(#cfddd5,#385347);border-radius:4px}
+#progress{height:3px;background:light-dark(#155b4c,#bfe69e);border-radius:4px}
 main{padding:14px}
 h2{font-size:22px;line-height:1.13;letter-spacing:-.5px;margin:0 0 10px}
 p{margin:0 0 10px;color:light-dark(#506560,#c6d5ce);font-size:14px}
-p:empty{display:none}
-#choices{display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
-#choices.scale{grid-template-columns:repeat(2,minmax(0,1fr))}
+p:empty,#sub:empty,#branches:empty{display:none}
+#sub{display:block;margin:0 0 5px;font-size:14px}
+#branches{margin:9px 0;padding-left:20px}
+#branches li+li{margin-top:7px}
+#choices button+button{margin-top:8px}
+#choices.scale{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#choices.scale button{margin:0}
 button{font:600 15px/1.22 system-ui;color:inherit;cursor:pointer;min-width:0;white-space:normal;overflow-wrap:anywhere;border:1px solid light-dark(#c9d6cd,#425d52);border-radius:10px}
 #choices button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:9px 12px;background:light-dark(#fdfefb,#20352e);text-align:left}
-#choices button:after{content:'›';margin-left:auto;color:light-dark(#507166,#b5c7ba)}
-.start svg{width:28px;height:28px;padding:5px;border-radius:7px;background:light-dark(#e5eee6,#344b40)}
-#choices.start button:after{content:'○'}
+#choices button:after{content:'○';margin-left:auto;color:light-dark(#507166,#b5c7ba)}
+#choices.links button:after{content:'›'}
+#choices.many button:after{content:'□'}
+#choices small{color:light-dark(#506560,#b5c7ba);margin-bottom:3px}
+
 #choices .selected{border-color:light-dark(#155b4c,#bfe69e);background:light-dark(#e1f1dd,#294b38)}
 #choices button.selected:after{content:'✓'}
 footer,nav{display:flex;flex-wrap:wrap;gap:6px}
 footer button,nav button{padding:8px 12px;min-height:36px;background:transparent}
-footer:not(:empty),nav:not(:empty){margin-top:9px}
+footer:not(:empty),nav:not(:empty){margin-top:14px}
 .primary{background:#155b4c;color:white;flex:1;border-color:#155b4c}
-@media(max-width:260px){header,main{padding:9px}svg{width:45px;height:45px}h2{font-size:19px}#choices button{padding:7px 9px}}
+@media(max-width:260px){header,main{padding:9px}h2{font-size:19px}}
 </style>
-<header><div><small id="label">Профкурс</small><h3 id="stage"></h3><div class="track"><div id="progress"></div></div></div>
-<svg viewBox="0 0 80 80" aria-hidden="true"><g fill="none" stroke="#83aba5"><circle cx="40" cy="40" r="36" stroke-dasharray="1 4"/><circle cx="40" cy="40" r="30"/><circle cx="40" cy="40" r="18" opacity=".5"/><path d="M40 4v72M4 40h72" opacity=".4"/></g><g id="needle"><path d="M40 10l7 30-7 3-7-3z" fill="#ffaf82"/><path d="M33 40l7 30 7-30-7 3z" fill="#d4f6ac"/></g><circle cx="40" cy="40" r="3" fill="#fff"/></svg></header>
-<main><h2 id="title"></h2><p id="text"></p><div id="choices"></div><nav id="pages"></nav><footer id="nav"></footer></main>
+<header><small id="label"></small><div class="track"><div id="progress"></div></div></header>
+<main><h2 id="title"></h2><b id="sub"></b><p id="text" aria-live="polite"></p><ul id="branches"></ul><div id="choices"></div><nav id="pages"></nav><footer id="nav"></footer></main>
 <script>
 const W=window.TelegramWidget, catalog=JSON.parse(W.publicData), options=__OPTIONS__;
 const {titles,stages}=catalog, end=titles.length;
-options[2]=catalog.age;
 const $=id=>document.getElementById(id);
 let model={step:0,answers:[],interests:[],job:''};
 try{Object.assign(model,JSON.parse(localStorage.getItem('quiz')));if(model.items)options[model.step]=model.items}catch{}
-let page=0, group=-1, list=[], role=-1, part=0, detail='', note='', busy=false;
-const sections=['Почему подходит','Рабочий день','Специализации','С чего начать'];
+let page=0, group=-1, list=[], role=-1, part=0, note='', busy=false, cache={};
+const ranks=__RANKS__;
+const sections=['Почему вам подходит','Рабочий день','Специализации','С чего начать'];
 function save(){try{localStorage.setItem('quiz',JSON.stringify({...model,items:options[model.step]}))}catch{}}
 function state(){return JSON.parse(W.chatData||'null')||{}}
 function button(where,label,action,style=''){
@@ -47,9 +49,9 @@ function button(where,label,action,style=''){
 function next(label,action){return button('nav',label,action,'primary')}
 function go(step){model.step=step;page=0;group=-1;role=-1;note='';save();draw()}
 async function request(key,apply){
- busy=true;note='Загрузка…';$('text').textContent=note;
- try{const reply=JSON.parse((await W.request(key)).result);if(reply.error)throw Error(reply.error);note='';apply(reply)}
- catch(e){note=e.name==='Error'?e.message:'Попробуйте ещё раз.'}
+ busy=true;note='Загрузка…';
+ try{const pending=W.request(key);draw();const reply=JSON.parse((await pending).result);if(reply.error)throw Error(reply.error);note='';apply(reply)}
+ catch(e){note=e.name==='Error'?e.message:'Не удалось загрузить. Попробуйте ещё раз.'}
  finally{busy=false;save();draw()}
 }
 function openStep(i){
@@ -70,34 +72,52 @@ function submit(){
  save();const values=titles.map((_,i)=>(m.answers[i]||0).toString(36)).join('');
  request('s:'+m.job+':'+values+':'+m.interests.map(x=>x.toString(36)).join('.'),()=>go(end+1))
 }
-function details(r,p){request('r:'+model.job+':'+r+':'+p,reply=>{role=r;part=p;detail=reply.text;page=0})}
+function details(r,p){
+ role=r;part=p;page=0;note='';
+ const key=model.job+':'+r;
+ const entry=cache[key]??={};
+ if(entry[p]!==undefined)return draw();
+ request('d:'+key+':'+p,reply=>Object.assign(entry,reply));
+}
 function draw(){
  const {step,answers,interests,job}=model, data=state();
  const stage=[0,0,0,1,2,3,3,3,4,4,4,5,5][step]??5;
  const slim=matchMedia('(max-width:260px)').matches;
- $('label').textContent='Профкурс · '+(stage+1)+' / 6';
- $('stage').textContent=step>=end?'Ваша подборка':stages[stage];
+ $('label').textContent=step<end?('Шаг '+(stage+1)+' из 6 · '+stages[stage]):'Анкета заполнена';
  $('progress').style.width=(step>=end?100:(step+1)*100/end)+'%';
- $('needle').setAttribute('transform','rotate('+(24+stage*46)+' 40 40)');
- $('choices').replaceChildren();$('pages').replaceChildren();$('nav').replaceChildren();
- $('choices').className='';
+ for(const id of ['choices','pages','nav','branches','sub'])$(id).replaceChildren();
+ $('choices').className='links';
  $('text').textContent=note;
  if(step>end && data.job===job && data.titles){
-  $('title').textContent=role<0?'Три профессии для вас':(data.titles[role]||'Как сочетать интересы');
+  $('label').textContent=role<0?'Подборка готова':role<3?'Профессия '+(role+1)+' из 3':'Ваша подборка';
+  const name=data.titles[role]||'Как совместить профессии';
+  $('title').textContent=role<0?'Три профессии для вас':part?sections[part]:name;
   if(role<0){
-   pageOf(data.titles,(title,i)=>button('choices',title,()=>details(i,0)),slim?2:3);
-   button('choices','Как сочетать интересы',()=>details(3,0));
-   button('nav','Пройти заново',()=>request('x:'+job,()=>{model={step:0,answers:[],interests:[],job:''};go(0)}));
+   $('text').textContent=note||catalog.intro;
+   pageOf(data.titles,(title,i)=>{
+    const b=button('choices','',()=>details(i,0));
+    const copy=document.createElement('span'),rank=document.createElement('small');
+    rank.textContent=ranks[i];copy.append(rank,title);b.append(copy);
+   },slim?2:3);
+   button('nav','Как совместить',()=>details(3,0));
+   button('nav','Начать заново',()=>request('x:'+job,()=>{model={step:0,answers:[],interests:[],job:''};cache={};go(0)}));
   }else{
-   const chunks=detail.match(/.{1,145}(?:\s|$)|\S{1,145}/gu)||[''];
-   pageOf(chunks,text=>{$('text').textContent=note||text},1);
-   if(role<3)sections.forEach((name,i)=>{if(part!==i)button('choices',name,()=>details(role,i))});
-   button('nav','К профессиям',()=>{role=-1;page=0;draw()});
+   const value=cache[job+':'+role]?.[part];
+   $('sub').textContent=part?name:role<3?sections[0]:'';
+   if(Array.isArray(value)){
+    pageOf(value,item=>{const li=document.createElement('li');li.textContent=item;$('branches').append(li)},slim?2:3);
+   }else if(value){
+    const chunks=value.match(slim?/.{1,85}(?:\s|$)|\S{1,85}/gu:/.{1,220}(?:\s|$)|\S{1,220}/gu)||[''];
+    pageOf(chunks,text=>{$('text').textContent=text},1);
+   }else if(!busy)next('Повторить',()=>details(role,part));
+   if(!part&&role<3)for(const i of [2,1,3])button('choices',sections[i],()=>details(role,i));
+   button('nav',part?'‹ К профессии':'‹ К подборке',()=>{if(part)details(role,0);else{role=-1;page=0;note='';draw()}});
   }
   return;
  }
  if(step>=end){
   const waiting=step>end;
+  if(waiting)$('label').textContent=data.error?'Подбор приостановлен':'Подбор идёт';
   $('title').textContent=waiting?'Подбираем профессии':'Готовы к подбору?';
   $('text').textContent=note||data.error||(waiting?'Результат появится здесь.':'DeepSeek подберёт по вашим ответам три профессии.');
   button('nav','К ответам',()=>{model.job='';openStep(end-1)});
@@ -109,11 +129,11 @@ function draw(){
  $('title').textContent=nested?options[3][group]:titles[step];
  if(!values){next('Загрузить варианты',()=>openStep(step));return}
  const scale=[2,8,9].includes(step);
- $('choices').className=scale?'scale':step===0?'start':'';
- if(!note)$('text').textContent=multi?'Выбрано '+interests.length+' из 4':step===0?'Подберём три профессии по вашим интересам и ритму жизни.':'';
+ $('choices').className=scale?'scale':multi?(nested?'many':'links'):'';
+ if(!note&&multi)$('text').textContent='Выбрано '+interests.length+' из 4';
  pageOf(values,(item,i)=>{
   const selected=nested?interests.includes(item[0]):!multi&&answers[step]===i;
-  const choice=button('choices',nested?item[1]:item,()=>{
+  button('choices',nested?item[1]:item,()=>{
    if(multi&&!nested)return request('i:'+i,reply=>{group=i;list=reply.items;page=0});
    note='';
    if(nested){
@@ -124,12 +144,9 @@ function draw(){
    }else answers[step]=i;
    save();draw();
   },selected?'selected':'');
-  if(step===0){
-   const path=['M3 8h18v12H3z M8 8V5h8v3 M3 13h18','M12 6L3 4v14l9 2 9-2V4l-9 2v14','M12 2a10 10 0 1 0 .1 0 M16 7l-2 7-6 3 2-7z'][i];
-   choice.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'+item;
-  }
+
  },scale?8:slim?3:4);
- if(step)button('nav',nested?'К сферам':'Назад',()=>{if(nested){group=-1;page=0;draw()}else openStep(step-1)});
+ if(step)button('nav',nested?'‹ К сферам':'‹ Назад',()=>{if(nested){group=-1;page=0;draw()}else openStep(step-1)});
  const advance=next('Дальше →',()=>openStep(step+1));
  advance.disabled=multi?!interests.length:answers[step]==null;
  advance.style.opacity=advance.disabled?'.47':'1';

@@ -1,4 +1,4 @@
-import { choices, generalInterests, interestGroups } from "../docs/options.js";
+import { choices, generalInterests, interestGroups, routeRanks } from "../docs/options.js";
 
 const sectors = ["Пропустить", "Строительство и ремонт", "Производство и техника", "Медиа и дизайн", "IT и данные", "Торговля и бизнес", "Образование", "Здоровье и спорт", "Гостеприимство", "Другая сфера"];
 export const questions = [
@@ -18,7 +18,7 @@ export const questions = [
 ];
 export const sectorsOfInterest = Object.entries({ ...interestGroups, "Пока выбираю сферу": generalInterests });
 const stages = ["Отправная точка","Интересы","Сильная сторона","Рабочий день","Темп обучения","Глубина освоения"];
-export const cardPublicData = JSON.stringify({titles:questions.map(q=>q[1]), stages, age:questions[2][2]});
+export const cardPublicData = JSON.stringify({titles:questions.map(q=>q[1]), stages, intro:"Первая ближе всего к вашим ответам. В двух других пригодятся ваши навыки."});
 export function questionOptions(index) {
   return index === 3 ? sectorsOfInterest.map(([name])=>name) : questions[index]?.[2];
 }
@@ -39,5 +39,6 @@ export function decodeAnswers(values, selected) {
 }
 
 export function cardHtml(template) {
-  return template.replace("__OPTIONS__", JSON.stringify(Object.fromEntries([0,8,9].map(i=>[i,questionOptions(i)]))));
+  return template.replace(/^[ \t]+/gm, "").replace("__RANKS__", JSON.stringify(routeRanks))
+    .replace("__OPTIONS__", JSON.stringify(Object.fromEntries([0,2,8,9].map(i=>[i,questionOptions(i)]))));
 }
