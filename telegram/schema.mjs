@@ -1,4 +1,4 @@
-import { choices, generalInterests, interestGroups, routeRanks } from "../docs/options.js";
+import { adultInterest, choices, groupsForAge, isAdult, routeRanks } from "../docs/options.js";
 
 const sectors = ["Пропустить", "Строительство и ремонт", "Производство и техника", "Медиа и дизайн", "IT и данные", "Торговля и бизнес", "Образование", "Здоровье и спорт", "Гостеприимство", "Другая сфера"];
 export const questions = [
@@ -16,7 +16,11 @@ export const questions = [
   ["complexity", "Какая сложность вам интересна?", ["1 · Простые задачи", "2 · Небольшой вызов", "3 · Разобраться в теме", "4 · Искать решения", "5 · Открытые задачи"]],
   ["immersion", "Насколько хотите погрузиться?", choices.immersion]
 ];
-export const sectorsOfInterest = Object.entries({ ...interestGroups, "Пока выбираю сферу": generalInterests });
+export const sectorsOfInterest = Object.entries(groupsForAge(null));
+export function interestItems(group, ageIndex) {
+  const category = sectorsOfInterest[group]?.[0];
+  return groupsForAge(choices.ageBand[ageIndex])[category]?.map(name => [choices.interests.indexOf(name), name]);
+}
 const stages = ["Отправная точка","Интересы","Сильная сторона","Рабочий день","Темп обучения","Глубина освоения"];
 export const cardPublicData = JSON.stringify({titles:questions.map(q=>q[1]), stages, intro:"Первая ближе всего к вашим ответам. В двух других пригодятся ваши навыки."});
 export function questionOptions(index) {
@@ -35,10 +39,13 @@ export function decodeAnswers(values, selected) {
     else profile[key] = choices[key][n];
   }
   profile.interests = selected.split(".").map(n => choices.interests[parseInt(n, 36)]);
+  if (profile.interests.includes(adultInterest) && !isAdult(profile.ageBand)) return null;
   return profile.interests.every(Boolean) && new Set(profile.interests).size === profile.interests.length ? profile : null;
 }
 
 export function cardHtml(template) {
   return template.replace(/^[ \t]+/gm, "").replace("__RANKS__", JSON.stringify(routeRanks))
-    .replace("__OPTIONS__", JSON.stringify(Object.fromEntries([0,2,8,9].map(i=>[i,questionOptions(i)]))));
+    .replace("__ADULT_ID__", choices.interests.indexOf(adultInterest))
+    .replace("__SKIP_AGE__", choices.ageBand.length)
+    .replace("__OPTIONS__", JSON.stringify(Object.fromEntries([0,8,9].map(i=>[i,questionOptions(i)]))));
 }

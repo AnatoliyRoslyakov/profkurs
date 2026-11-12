@@ -1,4 +1,4 @@
-import { choices, generalInterests, interestGroups, routeRanks } from "./options.js?v=4";
+import { adultInterest, choices, generalInterests, groupsForAge, isAdult, routeRanks } from "./options.js?v=5";
 
 const stages = [
   ["Отправная точка", "Чем вы сейчас занимаетесь?", "По вашим ответам подберём три профессии и покажем, как можно сочетать ваши интересы."],
@@ -207,7 +207,7 @@ function interestField() {
   }
   count.tabIndex = -1;
   field.append(count, selected);
-  const groups = { ...interestGroups, "Пока выбираю сферу": generalInterests };
+  const groups = groupsForAge(profile.ageBand);
   for (const [name, values] of Object.entries(groups)) {
     const group = el("details", "interest-group");
     const summary = el("summary", "", name);
@@ -305,6 +305,7 @@ function optionalDetails() {
   select.addEventListener("change", () => {
     touched = true;
     profile.ageBand = select.value || null;
+    if (!isAdult(profile.ageBand)) profile.interests = profile.interests.filter(value => value !== adultInterest);
   });
   age.append(select);
   body.append(job, age);

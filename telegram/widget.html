@@ -135,14 +135,17 @@ function draw(){
  pageOf(values,(item,i)=>{
   const selected=nested?interests.includes(item[0]):!multi&&answers[step]===i;
   button('choices',nested?item[1]:item,()=>{
-   if(multi&&!nested)return request('i:'+i,reply=>{group=i;list=reply.items;page=0});
+   if(multi&&!nested)return request('i:'+i+':'+answers[2],reply=>{group=i;list=reply.items;page=0});
    note='';
    if(nested){
     const id=item[0];
     if(selected)model.interests=interests.filter(x=>x!==id);
     else if(interests.length<4)interests.push(id);
     else note='Уже выбрано четыре занятия.';
-   }else answers[step]=i;
+   }else{
+    answers[step]=i;
+    if(step===2&&(i===0||i===__SKIP_AGE__))model.interests=interests.filter(n=>n!==__ADULT_ID__);
+   }
    save();draw();
   },selected?'selected':'');
 

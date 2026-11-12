@@ -20,10 +20,28 @@ export const interestGroups = {
   "Слова, культура и история": ["Писать и редактировать тексты", "Работать с языками и переводами", "Исследовать историю и архивы", "Делать выставки и культурные проекты"]
 };
 
+export const adultInterest = "Вести закрытый фотоблог по подписке (18+)";
+const mediaGroup = "Медиа, сцена и личный контент";
+const serviceInterests = ["Служить в армии", "Работать пожарным", "Работать спасателем", "Принимать вызовы экстренных служб"];
+
+export function isAdult(ageBand) {
+  return choices.ageBand.indexOf(ageBand) > 0;
+}
+
+export function groupsForAge(ageBand) {
+  return {
+    ...interestGroups,
+    [mediaGroup]: isAdult(ageBand) ? [...interestGroups[mediaGroup], adultInterest] : interestGroups[mediaGroup],
+    "Пока выбираю сферу": generalInterests,
+    "Служба и спасение": serviceInterests
+  };
+}
+
 export const choices = {
   status: ["Работаю", "Учусь", "Ищу новое дело"],
   ageBand: ["До 18 лет", "18–24 года", "25–34 года", "35–44 года", "45–54 года", "55 лет и старше"],
-  interests: [...generalInterests, ...Object.values(interestGroups).flat()],
+  // Telegram cards store these numeric positions, so new choices go at the end.
+  interests: [...generalInterests, ...Object.values(interestGroups).flat(), ...serviceInterests, adultInterest],
   strength: [
     "Быстро осваиваю инструменты", "Замечаю закономерности", "Нахожу необычные идеи",
     "Умею слушать и объяснять", "Объединяю людей", "Довожу дела до конца", "Точно работаю руками",

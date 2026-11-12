@@ -1,5 +1,5 @@
 import { handleTelegram } from "../telegram/bot.mjs";
-import { choices } from "../docs/options.js";
+import { adultInterest, choices, isAdult } from "../docs/options.js";
 
 const endpoint = "https://api.deepseek.com/chat/completions";
 const profileKeys = [...Object.keys(choices), "occupation"];
@@ -15,7 +15,7 @@ const instructions = `Вы — профконсультант. Все ответ
 Первой поставьте ближайшую профессию. Второй покажите смежную роль, которая меняет характер работы. Третьей предложите иную роль на пересечении интересов или навыков. Для узкого запроса раскройте разные стороны дела. Например, ремонт квартир даёт выбор между паркетчиком, реставратором и координатором ремонтных работ. Этот пример применим только к соответствующим ответам.
 Для каждой профессии: profession — понятное название; why — одна короткая фраза, связывающая роль с ответами; branches — две или три конкретные, различающиеся специализации внутри этой роли; firstStep — одно-два предложения о том, с какой темой удобно познакомиться и где о ней узнать. Учитывайте доступное время, усилия, сложность, уровень погружения и формат работы. Не назначайте упражнения, сроки или результат на сдачу. В общем поле connection назовите реальный способ совместить две роли или применить два интереса вместе.
 Поле location определяет место работы. «Только удалённо» — строгое условие для всех трёх профессий и специализаций: работа должна целиком выполняться дистанционно. При противоречии с ручным ремеслом сохраните отрасль через удалённую смежную роль, например расчёт смет, онлайн-консультирование или проектирование. При гибриде покажите реалистичное разделение очных и домашних задач. При желании ходить в офис, мастерскую или на объекты отдайте предпочтение соответствующим местам. atmosphere задаёт настроение дня, workStyle — способ взаимодействия. Для каждой роли в environment дайте одну живую зарисовку обычного дня с учётом этих ответов: где, с кем и над чем человек работает. Если формат неизвестен, опишите типичные условия.
-Подбирайте профессии для широкой аудитории. Не предлагайте работу на платформах для взрослых и не упоминайте их в ответе, даже если это записано в анкете. Интерес к работе перед камерой может привести в обычный моделинг, фотографию, видеопроизводство или ведение блога.
+Учитывайте интерес к службе и спасению. «Служить в армии» соответствует профессии военнослужащего, например военного связиста; «Работать пожарным» — профессии пожарного. Если очная служба несовместима с условиями, предложите смежную роль. Для этих профессий описывайте характер работы, обучение и требования к поступлению в общих чертах. Для подростка описывайте перспективу на будущее. «Вести блог или стрим» соответствует работе блогера, автора канала или ведущего стрима.
 Возраст не определяет способности. Не давайте прогнозов дохода или гарантий. Не придумывайте вакансии и лицензии. Отвечайте нейтрально, без ссылок, переносов и разметки внутри строк.
 Формат JSON: {"directions":[{"profession":"…","why":"…","environment":"…","branches":["…","…"],"firstStep":"…"}],"connection":"…"}. В directions ровно три разных объекта. На русском: profession 2–80 символов, why 20–360, environment 15–260, firstStep 15–300, специализация 2–100, connection 15–300.`;
 
@@ -48,6 +48,7 @@ function validProfile(body) {
     && Array.isArray(p.interests) && (p.interests.length > 0 || Boolean(p.otherInterest))
     && p.interests.length <= (legacy ? 3 : 4)
     && new Set(p.interests).size === p.interests.length
+    && (!p.interests.includes(adultInterest) || isAdult(p.ageBand))
     && p.interests.every(value => choices.interests.includes(value));
 }
 
@@ -56,10 +57,12 @@ function resultText(text, min, max) {
     && !/[<>`]|(?:https?:\/\/|www\.)/iu.test(text);
 }
 
-function validResult(value) {
+function validResult(value, adultMedia) {
   if (!exactKeys(value, ["directions", "connection"]) || !resultText(value.connection, 15, 300)
     || !Array.isArray(value.directions) || value.directions.length !== 3) return false;
-  if (/only[\s_-]*fans|онли[\s_-]*ф[эеа]нс|контент.{0,5}18\+|вебкам|(?:^|[^\p{L}])порно|эротич/iu.test(JSON.stringify(value))) return false;
+  const resultWords = JSON.stringify(value);
+  if (/only[\s_-]*fans|онли[\s_-]*ф[эеа]нс|вебкам|(?:^|[^\p{L}])порно|эротич/iu.test(resultWords)) return false;
+  if (!adultMedia && /(?:контент|фотоблог|видеоблог|платформ|фотосесси|съ[её]мк|публикаци)[^".!?]{0,35}(?:18\s*\+|для взрослых|взросл(?:ой|ую) аудитори)/iu.test(resultWords)) return false;
   const valid = value.directions.every(route => exactKeys(route, [...Object.keys(outputLengths), "branches"])
     && Object.entries(outputLengths).every(([key, [min, max]]) => resultText(route[key], min, max))
     && Array.isArray(route.branches) && [2, 3].includes(route.branches.length)
@@ -146,10 +149,14 @@ async function readJson(message, maxBytes, tooLarge, invalid, signal) {
 
 async function recommend(profile, secret, signal) {
   const unavailable = new HttpError(502, "Не удалось получить рекомендацию. Попробуйте позже.");
+  const adultMedia = isAdult(profile.ageBand) && profile.interests.includes(adultInterest);
+  const mediaGuidance = adultMedia
+    ? "Пользователь отдельно выбрал авторский фотоблог по подписке для аудитории 18+. Отразите это одной подходящей профессией, например «Автор закрытого фотоблога». Говорите нейтрально об авторской фотографии, редактуре и работе с подписчиками, без брендов и интимных подробностей."
+    : "Предлагайте профессии для широкой аудитории. Не предлагайте контент 18+, даже по свободному тексту. Блог, стрим, моделинг и обычная авторская подписка учитываются как самостоятельные интересы.";
   for (let attempt = 0; attempt < 2; attempt++) {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     const retry = attempt ? "\nПроверьте формат, длину текстов и различие профессий и специализаций." : "";
-    const system = instructions + retry;
+    const system = instructions + "\n" + mediaGuidance + retry;
     const response = await fetch(endpoint, {
       method: "POST", redirect: "manual", signal,
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + secret },
@@ -172,7 +179,7 @@ async function recommend(profile, secret, signal) {
     if (answer.finish_reason === "stop" && typeof answer.message?.content === "string") {
       try {
         const result = JSON.parse(answer.message.content);
-        if (validResult(result)) return result;
+        if (validResult(result, adultMedia)) return result;
       } catch { /* An incomplete or empty model answer gets one fresh attempt. */ }
     }
   }

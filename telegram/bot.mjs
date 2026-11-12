@@ -1,5 +1,4 @@
-import { choices } from "../docs/options.js";
-import { cardHtml, cardPublicData, decodeAnswers, questionOptions, sectorsOfInterest } from "./schema.mjs";
+import { cardHtml, cardPublicData, decodeAnswers, interestItems, questionOptions } from "./schema.mjs";
 import cardTemplate from "./widget.html";
 
 const ownerBot = "prof0bot";
@@ -90,9 +89,9 @@ async function handleQuery(query, token, env, generate, allowed) {
     const items=questionOptions(Number(args[1]));
     if (items) return answer({items});
   }
-  if (args[0]==="i" && args.length===2 && /^\d{1,2}$/.test(args[1])) {
-    const entry=sectorsOfInterest[Number(args[1])];
-    if (entry) return answer({items:entry[1].map(name=>[choices.interests.indexOf(name),name])});
+  if (args[0]==="i" && (args.length===2 || (args.length===3 && /^\d$/.test(args[2]))) && /^\d{1,2}$/.test(args[1])) {
+    const items=interestItems(Number(args[1]),Number(args[2]));
+    if (items) return answer({items});
   }
   const [op,job,one,two]=args;
   if (!/^[a-z0-9]{4,12}$/.test(job||"")) return answer({error:"Откройте новую анкету через /start."});

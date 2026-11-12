@@ -1,7 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
-import { cardHtml, cardPublicData, questionOptions, questions, sectorsOfInterest } from "./schema.mjs";
-import { choices } from "../docs/options.js";
+import { cardHtml, cardPublicData, interestItems, questionOptions, questions, sectorsOfInterest } from "./schema.mjs";
 
 const paths = ["../docs/options.js", "schema.mjs", "bot.mjs", "../api/worker.mjs", "widget.html"];
 const [catalog,schema,bot,worker,template] = await Promise.all(paths.map(path=>readFile(new URL(path,import.meta.url),"utf8")));
@@ -9,8 +8,8 @@ const html=cardHtml(template);
 const size=deflateSync(html,{level:9}).length;
 if (size>4096 || Buffer.byteLength(html)>32768) throw Error("Виджет превышает лимит Telegram.");
 if ([cardPublicData,...questions.map((_, i)=>JSON.stringify({items:questionOptions(i)}))].some(data=>Buffer.byteLength(data)>1024)) throw Error("Данные экрана превышают лимит Telegram.");
-for (const [,values] of sectorsOfInterest) {
-  const data=JSON.stringify({items:values.map(name=>[choices.interests.indexOf(name),name])});
+for (const index of sectorsOfInterest.keys()) {
+  const data=JSON.stringify({items:interestItems(index,1)});
   if(Buffer.byteLength(data)>1024) throw Error("Список не помещается в ответ Telegram.");
 }
 function inlineSource(source) {
