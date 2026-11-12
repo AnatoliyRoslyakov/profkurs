@@ -338,7 +338,7 @@ function renderOutcome() {
     const why = el("section", "result-block");
     why.append(el("h2", "", "Почему вам подходит"), el("p", "", result.why));
     const first = el("section", "result-block first-step");
-    first.append(el("h2", "", "Первый шаг"), el("p", "", result.firstStep));
+    first.append(el("h2", "", "С чего можно начать"), el("p", "", result.firstStep));
     panel.append(why, first);
     actions.append(button("Изменить ответы", () => navigate(0)), button("Начать заново", restart, "secondary"));
   }
