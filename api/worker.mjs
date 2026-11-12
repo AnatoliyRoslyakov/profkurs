@@ -115,9 +115,9 @@ async function readJson(message, maxBytes, tooLarge, invalid, signal) {
     let size = 0;
     let json = "";
     while (true) {
-      signal.throwIfAborted();
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       const { done, value } = await reader.read();
-      signal.throwIfAborted();
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       if (done) break;
       size += value.byteLength;
       if (size > maxBytes) throw tooLarge;
@@ -126,7 +126,7 @@ async function readJson(message, maxBytes, tooLarge, invalid, signal) {
     return JSON.parse(json + decoder.decode());
   } catch (error) {
     stop();
-    signal.throwIfAborted();
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     throw error === tooLarge ? tooLarge : invalid;
   } finally {
     signal.removeEventListener("abort", stop);
@@ -137,11 +137,11 @@ async function readJson(message, maxBytes, tooLarge, invalid, signal) {
 async function recommend(profile, secret, signal) {
   const unavailable = new HttpError(502, "Не удалось получить рекомендацию. Попробуйте позже.");
   for (let attempt = 0; attempt < 2; attempt++) {
-    signal.throwIfAborted();
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     const system = attempt === 0 ? instructions
       : instructions + "\nПроверьте JSON, три точных ключа и ограничения длины перед ответом.";
     const response = await fetch(endpoint, {
-      method: "POST", redirect: "error", signal,
+      method: "POST", redirect: "manual", signal,
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + secret },
       body: JSON.stringify({
         model: "deepseek-flash", thinking: { type: "disabled" }, response_format: { type: "json_object" },
