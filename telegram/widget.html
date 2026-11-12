@@ -23,14 +23,13 @@ button{font:600 15px/1.22 system-ui;color:inherit;cursor:pointer;min-width:0;whi
 
 #choices .selected{border-color:light-dark(#155b4c,#bfe69e);background:light-dark(#e1f1dd,#294b38)}
 #choices button.selected:after{content:'✓'}
-footer,nav{display:flex;flex-wrap:wrap;gap:6px}
-footer button,nav button{padding:8px 12px;min-height:36px;background:transparent}
-footer:not(:empty),nav:not(:empty){margin-top:14px}
+nav{display:flex;flex-wrap:wrap;gap:6px;padding-top:14px}
+nav button{padding:8px 12px;min-height:36px;background:transparent}
 .primary{background:#155b4c;color:white;flex:1;border-color:#155b4c}
 @media(max-width:260px){header,main{padding:9px}h2{font-size:19px}}
 </style>
 <header><small id="label"></small><div class="track"><div id="progress"></div></div></header>
-<main><h2 id="title"></h2><b id="sub"></b><p id="text" aria-live="polite"></p><ul id="branches"></ul><div id="choices"></div><nav id="pages"></nav><footer id="nav"></footer></main>
+<main><h2 id="title"></h2><b id="sub"></b><p id="text" aria-live="polite"></p><ul id="branches"></ul><div id="choices"></div><div id="pages"></div><div id="nav"></div></main>
 <script>
 const W=window.TelegramWidget, catalog=JSON.parse(W.publicData), options=__OPTIONS__;
 const {titles,stages}=catalog, end=titles.length;
@@ -43,11 +42,13 @@ const sections=['Почему вам подходит','Рабочий день'
 function save(){try{localStorage.setItem('quiz',JSON.stringify({...model,items:options[model.step]}))}catch{}}
 function state(){return JSON.parse(W.chatData||'null')||{}}
 function button(where,label,action,style=''){
+ const slot=$(where);
+ const row=where==='choices'?slot:slot.firstElementChild||slot.appendChild(document.createElement('nav'));
  const b=document.createElement('button');
- b.textContent=label;b.className=style;b.onclick=()=>{if(!busy)action()};$(where).appendChild(b);return b;
+ b.textContent=label;b.className=style;b.onclick=()=>{if(!busy)action()};row.appendChild(b);return b;
 }
 function next(label,action){return button('nav',label,action,'primary')}
-function go(step){model.step=step;page=0;group=-1;role=-1;note='';save();draw()}
+function go(step){model.step=step;page=0;group=-1;role=-1;note='';if(!busy){save();draw()}}
 async function request(key,apply){
  busy=true;note='Загрузка…';
  try{const pending=W.request(key);draw();const reply=JSON.parse((await pending).result);if(reply.error)throw Error(reply.error);note='';apply(reply)}
