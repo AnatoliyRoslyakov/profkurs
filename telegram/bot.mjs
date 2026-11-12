@@ -25,10 +25,10 @@ async function digest(text) {
   return Array.from(bytes, n => n.toString(16).padStart(2,"0")).join("");
 }
 
-function setupScreen(message = "", status = 200) {
+function setupScreen(proof, message = "", status = 200) {
   const page = '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Подключение @prof0bot</title><style>html{color-scheme:light dark}body{max-width:32rem;margin:10vh auto;padding:1rem;font:17px/1.5 system-ui}input,button{font:inherit;padding:.65rem;border-radius:.5rem}input{display:block;box-sizing:border-box;width:100%;margin:.5rem 0 1rem}a{color:LinkText}button{cursor:pointer}h1{line-height:1.15}</style><h1>Подключить «Профкурс»</h1>'
     + (message ? '<p role="status">'+message+'</p>' : '')
-    + '<p>Только для владельца <b>@prof0bot</b>. В <a href="https://t.me/BotFather">@BotFather</a> откройте /mybots → @prof0bot → API Token. Скопируйте действующий токен и вставьте ниже.</p><form method="post"><label>Токен @prof0bot<input type="password" name="token" required maxlength="120" autocomplete="off" spellcheck="false"></label><button>Подключить карточку</button></form><p>Сервер «Профкурса» проверит токен через Telegram и сохранит его в зашифрованном виде для ответов бота. После подключения команда /start откроет анкету прямо в чате.</p></html>';
+    + '<p>Только для владельца <b>@prof0bot</b>. В <a href="https://t.me/BotFather">@BotFather</a> откройте /mybots → @prof0bot → API Token. Скопируйте действующий токен и вставьте ниже.</p><form method="post"><input type="hidden" name="proof" value="'+proof+'"><label>Токен @prof0bot<input type="password" name="token" required maxlength="120" autocomplete="off" spellcheck="false"></label><button>Подключить карточку</button></form><p>Сервер «Профкурса» проверит токен через Telegram и сохранит его в зашифрованном виде для ответов бота. После подключения команда /start откроет анкету прямо в чате.</p></html>';
   return new Response(page, {status, headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Referrer-Policy":"no-referrer","X-Robots-Tag":"noindex, nofollow","Content-Security-Policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}});
 }
 
@@ -50,20 +50,27 @@ async function readToken(env) {
 }
 
 async function connectBot(request, env, origin, hookSecret) {
-  if (request.method === "GET") return setupScreen();
-  if (request.method !== "POST" || request.headers.get("Origin") !== origin ||
-      request.headers.get("Content-Type")?.split(";")[0] !== "application/x-www-form-urlencoded") return publicText("Доступ закрыт.",403);
+  const proof = await digest("profkurs/setup-form/"+env.TELEGRAM_CARD_SECRET);
+  const screen = (message, status) => setupScreen(proof,message,status);
+  if (request.method === "GET") return screen();
+  if (request.method !== "POST") return publicText("Используйте форму подключения.",405);
+  const source = request.headers.get("Origin");
+  if ((source && source !== "null" && source !== origin) || request.headers.get("Sec-Fetch-Site") === "cross-site")
+    return publicText("Откройте персональную ссылку подключения и отправьте форму с этой страницы.",403);
+  if (request.headers.get("Content-Type")?.split(";")[0] !== "application/x-www-form-urlencoded") return publicText("Используйте форму подключения.",415);
   if (Number(request.headers.get("Content-Length")) > 512) return publicText("Слишком длинное значение.",413);
   const raw = await request.text();
   if (raw.length > 512) return publicText("Слишком длинное значение.",413);
-  const token = (new URLSearchParams(raw).get("token") || "").trim();
-  if (!/^\d{5,15}:[a-zA-Z0-9_-]{20,96}$/.test(token)) return setupScreen("Проверьте формат токена.",400);
+  const fields = new URLSearchParams(raw);
+  if (fields.get("proof") !== proof) return publicText("Форма устарела. Откройте персональную ссылку заново и повторите подключение.",403);
+  const token = (fields.get("token") || "").trim();
+  if (!/^\d{5,15}:[a-zA-Z0-9_-]{20,96}$/.test(token)) return screen("Проверьте формат токена.",400);
   let bot;
-  try { bot = await telegramCall(token,"getMe"); } catch { return setupScreen("Telegram не подтвердил токен. Проверьте его в BotFather.",400); }
-  if (bot.username?.toLowerCase() !== ownerBot) return setupScreen("Этот токен принадлежит другому боту.",400);
+  try { bot = await telegramCall(token,"getMe"); } catch { return screen("Telegram не подтвердил токен. Проверьте его в BotFather.",400); }
+  if (bot.username?.toLowerCase() !== ownerBot) return screen("Этот токен принадлежит другому боту.",400);
   const url = origin + "/telegram/webhook";
   const current = await telegramCall(token,"getWebhookInfo");
-  if (current.url && current.url !== url) return setupScreen("У бота уже есть другой webhook. Отключите его у прежнего обработчика, если хотите заменить его «Профкурсом».",409);
+  if (current.url && current.url !== url) return screen("У бота уже есть другой webhook. Отключите его у прежнего обработчика, если хотите заменить его «Профкурсом».",409);
   await storeToken(env,token);
   await telegramCall(token,"setWebhook",{url,secret_token:hookSecret,allowed_updates:["message","widget_query"],drop_pending_updates:false});
   return publicText("Готово. Откройте https://t.me/prof0bot и отправьте /start. В чате появится карточка «Профкурс».");
