@@ -1,4 +1,4 @@
-import { adultInterest, choices, generalInterests, interestGroups, isAdultBand } from "./options.js?v=2";
+import { choices, generalInterests, interestGroups } from "./options.js?v=3";
 
 const stages = [
   ["Отправная точка", "Чем вы сейчас занимаетесь?", "По вашим ответам подберём три профессии и покажем, как можно сочетать ваши интересы."],
@@ -223,15 +223,6 @@ function interestField() {
     const options = el("div", "interest-chips");
     group.append(summary, options);
     for (const value of values) {
-      if (value === adultInterest && !isAdultBand(profile.ageBand)) {
-        if (profile.ageBand === null) {
-          const ageLink = el("button", "age-link", "Указать возраст для направлений 18+");
-          ageLink.type = "button";
-          ageLink.onclick = () => { detailsOpen = true; navigate(0); };
-          options.append(ageLink);
-        }
-        continue;
-      }
       const row = el("label", "interest-chip");
       const input = el("input");
       input.type = "checkbox";
@@ -323,7 +314,6 @@ function optionalDetails() {
   select.addEventListener("change", () => {
     touched = true;
     profile.ageBand = select.value || null;
-    if (!isAdultBand(profile.ageBand)) profile.interests = profile.interests.filter(value => value !== adultInterest);
   });
   age.append(select);
   body.append(job, age);
