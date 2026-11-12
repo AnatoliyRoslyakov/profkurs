@@ -247,3 +247,28 @@ button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-v
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+.interest-group, .career-route { border-bottom: 1px solid var(--line); }
+.interest-group summary, .career-route summary { cursor: pointer; font-weight: 650; color: var(--ink); padding: 13px 0; }
+.interest-group summary::marker, .career-route summary::marker { color: var(--primary); }
+.chosen-interests, .interest-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chosen-interests:not(:empty), .interest-chips { margin: 8px 0 13px; }
+.interest-chip, .picked { display: inline-flex; align-items: center; position: relative; cursor: pointer; border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px; line-height: 1.25; color: var(--ink); background: var(--surface); }
+.interest-chip input { position: absolute; width: 1px; opacity: 0; }
+.interest-chip:has(:checked), .picked { border-color: var(--primary); background: var(--active); }
+.interest-chip:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.interest-chip:has(:disabled) { opacity: .6; }
+.age-link { color: var(--primary); background: none; border: 0; text-decoration: underline; padding: 8px; cursor: pointer; }
+.free-interest { display: grid; gap: 6px; margin-top: 17px; font-weight: 600; }
+.free-interest input { min-width: 0; font: inherit; font-weight: 400; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px; }
+.career-route { padding: 5px 0; }
+.career-route summary { font-size: 21px; overflow-wrap: anywhere; }
+.career-route h3 { font-size: 16px; margin: 12px 0 4px; }
+.career-route p { margin: 3px 0 12px; }
+.career-route .first-step { margin: 10px 0 14px; }
+.career-route .first-step h3, .career-route .first-step p { margin: 2px 0 5px; }
+.route-branches { padding-left: 1.2em; margin: 4px 0 12px; }
+.work-question { border-bottom: 1px solid var(--line); }
+.work-question > summary { padding: 14px 0; cursor: pointer; }
+.work-question summary::marker { color: var(--primary); }
+.work-answer:not(:empty) { display: block; margin: 4px 0 0 1em; font-size: 14px; color: var(--muted); }

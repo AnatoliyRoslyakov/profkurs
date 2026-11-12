@@ -35,16 +35,20 @@
 <div id="choices"></div>
 <div id="footer">
   <button id="back">Назад</button>
+  <button id="more">Ещё занятия</button>
   <button id="open">Продолжить в приложении</button>
 </div>
 <script>
   const statuses = ['Работаю', 'Учусь', 'Ищу новое дело'];
   const activities = ['Мастерить и чинить', 'Анализировать данные', 'Придумывать и создавать',
-    'Помогать людям', 'Вести за собой команду', 'Планировать и упорядочивать'];
+    'Помогать людям', 'Вести за собой команду', 'Планировать и упорядочивать',
+    'Работать перед камерой', 'Заботиться о природе и животных', 'Готовить и придумывать вкусы',
+    'Строить и ремонтировать', 'Обучать и объяснять', 'Организовывать поездки и события'];
   const byId = (id) => document.getElementById(id);
   let status = -1;
   let interest = -1;
   let step = 1;
+  let offset = 0;
 
   function draw() {
     const first = step === 1;
@@ -52,7 +56,9 @@
     byId('question').textContent = first ? 'С чего вы начинаете?' : 'Что вам интереснее делать?';
     byId('footer').style.display = first ? 'none' : 'flex';
     byId('open').disabled = interest < 0;
-    const choices = (first ? statuses : activities).map((name, index) => {
+    byId('more').textContent = offset ? 'Предыдущие занятия' : 'Ещё занятия';
+    const choices = (first ? statuses : activities.slice(offset, offset + 6)).map((name, localIndex) => {
+      const index = first ? localIndex : offset + localIndex;
       const selected = (first ? status : interest) === index;
       const button = document.createElement('button');
       button.className = selected ? 'choice chosen' : 'choice';
@@ -65,6 +71,7 @@
         if (first) {
           if (status !== index) interest = -1;
           status = index;
+          offset = interest >= 6 ? 6 : 0;
           step = 2;
         } else {
           interest = index;
@@ -76,6 +83,7 @@
     byId('choices').replaceChildren(...choices);
   }
 
+  byId('more').onclick = () => { offset = offset ? 0 : 6; draw(); };
   byId('back').onclick = () => { step = 1; draw(); };
   byId('open').onclick = () => {
     if (interest >= 0 && window.TelegramWidget) {

@@ -1,19 +1,20 @@
-import { choices } from "./options.js";
+import { adultInterest, choices, generalInterests, interestGroups, isAdultBand } from "./options.js?v=2";
 
 const stages = [
-  ["Отправная точка", "Чем вы сейчас занимаетесь?", "По вашим ответам ИИ предложит профессию и подскажет, с чего начать."],
-  ["Интересы", "Что вам интересно делать?", "Выберите от одного до трёх занятий, к которым вас тянет."],
+  ["Отправная точка", "Чем вы сейчас занимаетесь?", "По вашим ответам подберём три профессии и покажем, как можно сочетать ваши интересы."],
+  ["Интересы", "Что вам интересно делать?", "Откройте интересные сферы. Можно отметить до четырёх занятий из разных сфер или вписать своё."],
   ["Сильная сторона", "Что у вас получается лучше всего?", "Вспомните, с чем к вам чаще всего обращаются за помощью."],
-  ["Формат работы", "Как вам удобнее работать?", "Представьте, что вам предстоит решить новую задачу."],
+  ["Рабочий день", "Каким вы видите свой рабочий день?", "Представьте обычный вторник. Где хочется его провести и в какой момент вы почувствуете, что вам там хорошо?"],
   ["Темп обучения", "Сколько времени у вас есть?", "Выберите нагрузку, которую сможете вписать в обычную неделю."],
   ["Глубина освоения", "Насколько глубоко хотите погрузиться?", "Укажите комфортную сложность и то, к чему хотите прийти."]
 ];
 const stageFields = [
-  ["status"], ["interests"], ["strength"], ["workStyle"], ["hoursPerWeek", "months", "effort"], ["complexity", "immersion"]
+  ["status"], ["interests"], ["strength"], ["location", "atmosphere", "workStyle"], ["hoursPerWeek", "months", "effort"], ["complexity", "immersion"]
 ];
 const prompts = {
-  status: "Выберите, чем вы сейчас занимаетесь.", interests: "Выберите от одного до трёх занятий.",
+  status: "Выберите, чем вы сейчас занимаетесь.", interests: "Отметьте хотя бы одно занятие или впишите своё.",
   strength: "Выберите свою сильную сторону.", workStyle: "Выберите подходящий формат работы.",
+  location: "Выберите, где вы хотите работать.", atmosphere: "Выберите близкую вам обстановку.",
   hoursPerWeek: "Выберите число часов в неделю.", months: "Выберите срок обучения.",
   effort: "Выберите комфортную нагрузку.", complexity: "Выберите сложность задач.", immersion: "Выберите цель обучения."
 };
@@ -27,7 +28,7 @@ const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
 
 function blankProfile() {
   return {
-    status: null, occupation: null, ageBand: null, interests: [], strength: null, workStyle: null,
+    status: null, occupation: null, ageBand: null, interests: [], otherInterest: null, strength: null, workStyle: null, location: null, atmosphere: null,
     hoursPerWeek: null, months: null, effort: null, complexity: null, immersion: null
   };
 }
@@ -86,10 +87,10 @@ themeButton.addEventListener("click", () => {
 systemTheme.addEventListener?.("change", applyTheme);
 
 function applyStartParam(value) {
-  const match = /^route1_([0-2])_([0-5])$/.exec(value || "");
-  if (!match || touched) return;
+  const match = /^route1_([0-2])_(\d{1,2})$/.exec(value || "");
+  if (!match || touched || !generalInterests[Number(match[2])]) return;
   profile.status = choices.status[Number(match[1])];
-  profile.interests = [choices.interests[Number(match[2])]];
+  profile.interests = [generalInterests[Number(match[2])]];
 }
 
 function back() {
@@ -179,10 +180,81 @@ function heading(parent, title, intro) {
   if (intro) parent.append(el("p", "intro", intro));
 }
 
-function updateInterests(field) {
-  const count = profile.interests.length;
-  field.querySelector(".selection-count").textContent = `Выбрано ${count} из 3`;
-  field.querySelectorAll("input").forEach(input => { input.disabled = count === 3 && !input.checked; });
+function interestField() {
+  const field = el("fieldset", "field interest-field");
+  field.dataset.field = "interests";
+  field.append(el("legend", "sr-only", stages[1][1]));
+  const selected = el("div", "chosen-interests");
+  const count = el("p", "selection-count");
+  count.setAttribute("aria-live", "polite");
+  const controls = new Map();
+
+  function update() {
+    const picked = profile.interests;
+    count.textContent = `Выбрано ${picked.length} из 4`;
+    selected.replaceChildren();
+    for (const [value, input] of controls) {
+      input.checked = picked.includes(value);
+      input.disabled = picked.length >= 4 && !input.checked;
+    }
+    for (const value of picked) {
+      const remove = el("button", "picked", value + " ×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", "Убрать «" + value + "»");
+      remove.onclick = () => { toggle(value, false); count.focus(); };
+      selected.append(remove);
+    }
+  }
+  function toggle(value, checked) {
+    profile.interests = profile.interests.filter(item => item !== value);
+    if (checked && profile.interests.length < 4) profile.interests.push(value);
+    touched = true;
+    clearFeedback();
+    update();
+    refreshDial();
+    haptic();
+  }
+  count.tabIndex = -1;
+  field.append(count, selected);
+  const groups = { ...interestGroups, "Пока выбираю сферу": generalInterests };
+  for (const [name, values] of Object.entries(groups)) {
+    const group = el("details", "interest-group");
+    const summary = el("summary", "", name);
+    const options = el("div", "interest-chips");
+    group.append(summary, options);
+    for (const value of values) {
+      if (value === adultInterest && !isAdultBand(profile.ageBand)) {
+        if (profile.ageBand === null) {
+          const ageLink = el("button", "age-link", "Указать возраст для направлений 18+");
+          ageLink.type = "button";
+          ageLink.onclick = () => { detailsOpen = true; navigate(0); };
+          options.append(ageLink);
+        }
+        continue;
+      }
+      const row = el("label", "interest-chip");
+      const input = el("input");
+      input.type = "checkbox";
+      input.value = value;
+      input.name = "interests";
+      input.onchange = () => toggle(value, input.checked);
+      controls.set(value, input);
+      row.append(input, el("span", "", value));
+      options.append(row);
+    }
+    field.append(group);
+  }
+  const free = el("label", "free-interest", "Своё занятие");
+  const input = el("input");
+  input.type = "text";
+  input.maxLength = 100;
+  input.value = profile.otherInterest || "";
+  input.placeholder = "Например, делать витражи";
+  input.oninput = () => { touched = true; profile.otherInterest = input.value.trim() || null; clearFeedback(); };
+  free.append(input);
+  field.append(free);
+  update();
+  return field;
 }
 
 function makeField(key, title = "", segments = false) {
@@ -191,14 +263,13 @@ function makeField(key, title = "", segments = false) {
   field.append(el("legend", title ? "" : "sr-only", title || stages[step][1]));
   const options = el("div", segments ? "segments" : "options");
   field.append(options);
-  const multi = key === "interests";
   choices[key].forEach((value, index) => {
     const row = el("label", segments ? "segment" : "option" + (key === "status" ? " status-option" : ""));
     const input = el("input");
-    input.type = multi ? "checkbox" : "radio";
+    input.type = "radio";
     input.name = key;
     input.value = String(value);
-    input.checked = multi ? profile.interests.includes(value) : profile[key] === value;
+    input.checked = profile[key] === value;
     row.append(input);
     if (key === "status") {
       const icon = el("span", "option-art art-" + ["work", "study", "explore"][index]);
@@ -210,10 +281,7 @@ function makeField(key, title = "", segments = false) {
     if (!segments) row.append(el("span", "indicator"));
     input.addEventListener("change", () => {
       touched = true;
-      if (multi) {
-        profile.interests = Array.from(options.querySelectorAll("input:checked"), item => item.value).slice(0, 3);
-        updateInterests(field);
-      } else profile[key] = value;
+      profile[key] = value;
       if (key === "complexity") field.querySelector(".scale-caption").textContent = complexityLabels[index];
       clearFeedback();
       refreshDial();
@@ -221,12 +289,6 @@ function makeField(key, title = "", segments = false) {
     });
     options.append(row);
   });
-  if (multi) {
-    const count = el("p", "selection-count");
-    count.setAttribute("aria-live", "polite");
-    field.append(count);
-    updateInterests(field);
-  }
   if (key === "complexity") {
     const caption = el("p", "scale-caption", complexityLabels[profile.complexity - 1] || "От простых задач (1) до сложных и открытых (5).");
     caption.setAttribute("aria-live", "polite");
@@ -258,7 +320,11 @@ function optionalDetails() {
   select.append(empty);
   choices.ageBand.forEach(item => select.append(el("option", "", item)));
   select.value = profile.ageBand || "";
-  select.addEventListener("change", () => { touched = true; profile.ageBand = select.value || null; });
+  select.addEventListener("change", () => {
+    touched = true;
+    profile.ageBand = select.value || null;
+    if (!isAdultBand(profile.ageBand)) profile.interests = profile.interests.filter(value => value !== adultInterest);
+  });
   age.append(select);
   body.append(job, age);
   details.append(el("summary", "", "Занятие и возраст — по желанию"), body);
@@ -273,7 +339,7 @@ function firstInvalid(index) {
   return stageFields[index].find(key => {
     const answer = profile[key];
     if (key === "interests") {
-      return answer.length < 1 || answer.length > 3 || new Set(answer).size !== answer.length || answer.some(value => !choices.interests.includes(value));
+      return (!answer.length && !profile.otherInterest) || answer.length > 4 || new Set(answer).size !== answer.length || answer.some(value => !choices.interests.includes(value));
     }
     return !choices[key].includes(answer);
   });
@@ -284,8 +350,10 @@ function feedback(key) {
   const error = el("p", "feedback", prompts[key]);
   error.setAttribute("role", "alert");
   const group = panel.querySelector(`[data-field="${key}"]`);
+  const enclosure = group.closest("details");
+  if (enclosure) enclosure.open = true;
   group.append(error);
-  group.querySelector("input")?.focus();
+  (group.querySelector("summary") || group.querySelector("input"))?.focus();
 }
 
 function advance() {
@@ -299,20 +367,52 @@ function advance() {
   submitProfile();
 }
 
+function workPreferences() {
+  const section = el("div", "work-preferences");
+  const questions = [
+    ["location", "Где вы хотите работать?"],
+    ["atmosphere", "Как выглядит ваш удачный день?"],
+    ["workStyle", "Как вам удобнее решать задачи?"]
+  ];
+  const firstEmpty = questions.find(([key]) => !profile[key])?.[0] || "location";
+  questions.forEach(([key, title]) => {
+    const block = el("details", "work-question");
+    const summary = el("summary");
+    const answer = el("span", "work-answer", profile[key] || "");
+    summary.append(el("strong", "", title), answer);
+    block.append(summary, makeField(key, title));
+    block.querySelector("legend").classList.add("sr-only");
+    block.open = key === firstEmpty;
+    block.addEventListener("change", () => {
+      answer.textContent = profile[key];
+      const following = block.nextElementSibling;
+      if (following) {
+        block.open = false;
+        following.open = true;
+        following.querySelector("summary").focus();
+      }
+    });
+    section.append(block);
+  });
+  return section;
+}
+
 function renderForm() {
   heading(panel, stages[step][1], stages[step][2]);
   const form = el("form");
   if (step === 0) form.append(makeField("status"), optionalDetails());
-  else if (step < 4) form.append(makeField(stageFields[step][0]));
+  else if (step === 1) form.append(interestField());
+  else if (step === 2) form.append(makeField("strength"));
+  else if (step === 3) form.append(workPreferences());
   else if (step === 4) {
     form.append(makeField("hoursPerWeek", "Часов в неделю", true), makeField("months", "Месяцев на обучение", true), makeField("effort", "В каком темпе?"));
   } else {
     form.append(makeField("complexity", "Сложность задач", true), makeField("immersion", "Цель обучения"));
-    form.append(el("p", "scale-caption", "По кнопке «Подобрать профессию» ваши ответы получит DeepSeek."));
+    form.append(el("p", "scale-caption", "По кнопке «Подобрать профессии» ваши ответы получит DeepSeek."));
   }
   const actions = el("div", step ? "actions" : "actions solo");
   if (step) actions.append(button("Назад", back, "secondary", "back"));
-  const next = el("button", "action", step === stages.length - 1 ? "Подобрать профессию" : "Дальше");
+  const next = el("button", "action", step === stages.length - 1 ? "Подобрать профессии" : "Дальше");
   next.type = "submit";
   const arrow = el("span", "arrow");
   arrow.setAttribute("aria-hidden", "true");
@@ -327,19 +427,30 @@ function renderOutcome() {
   const actions = el("div", "actions");
   if (page === "loading") {
     panel.append(el("span", "spinner"));
-    heading(panel, "Подбираем профессию", "ИИ сопоставляет ваши интересы, сильную сторону и планы на обучение.");
+    heading(panel, "Подбираем профессии", "ИИ сопоставляет ваши интересы, сильную сторону и планы на обучение.");
     actions.append(button("Вернуться к ответам", back, "secondary", "back"));
   } else if (page === "error") {
     heading(panel, "Подбор пока не завершён", failure);
     actions.append(button("К ответам", back, "secondary", "back"), button("Повторить", submitProfile));
   } else {
-    panel.append(el("p", "result-label", "Ваша профессия по ответам"));
-    heading(panel, result.profession);
-    const why = el("section", "result-block");
-    why.append(el("h2", "", "Почему вам подходит"), el("p", "", result.why));
-    const first = el("section", "result-block first-step");
-    first.append(el("h2", "", "С чего можно начать"), el("p", "", result.firstStep));
-    panel.append(why, first);
+    heading(panel, "Какие профессии вам подходят");
+    result.directions.forEach((route, index) => {
+      const card = el("details", "career-route");
+      card.open = index === 0;
+      const summary = el("summary");
+      summary.append(el("span", "", route.profession));
+      card.append(summary, el("p", "route-why", route.why), el("h3", "", "Как выглядит рабочий день"),
+        el("p", "", route.environment), el("h3", "", "Специализации"));
+      const branches = el("ul", "route-branches");
+      for (const branch of route.branches) branches.append(el("li", "", branch));
+      const start = el("div", "first-step");
+      start.append(el("h3", "", "С чего можно начать"), el("p", "", route.firstStep));
+      card.append(branches, start);
+      panel.append(card);
+    });
+    const mix = el("section", "result-block");
+    mix.append(el("h2", "", "Как совместить интересы"), el("p", "", result.connection));
+    panel.append(mix);
     actions.append(button("Изменить ответы", () => navigate(0)), button("Начать заново", restart, "secondary"));
   }
   panel.append(actions);
@@ -366,9 +477,10 @@ function endpoint() {
 }
 
 function responseIsValid(data) {
-  return data && ["profession", "why", "firstStep"].every(key =>
-    typeof data[key] === "string" && data[key].trim().length > 0 && data[key].length <= 12000
-  );
+  const hasText = value => typeof value === "string" && value.trim().length > 0;
+  return hasText(data?.connection) && Array.isArray(data.directions) && data.directions.length === 3
+    && data.directions.every(route => route && [route.profession, route.why, route.environment, route.firstStep].every(hasText)
+      && Array.isArray(route.branches) && route.branches.length >= 2 && route.branches.every(hasText));
 }
 
 function showFailure(message) {
@@ -394,7 +506,7 @@ async function submitProfile() {
   try {
     const response = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ version: 1, profile }), signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer"
+      body: JSON.stringify({ version: 2, profile }), signal: controller.signal, credentials: "omit", referrerPolicy: "no-referrer"
     });
     if (pending !== controller) return;
     if (!response.ok) {
