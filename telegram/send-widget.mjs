@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { deflateSync } from 'node:zlib';
-import { cardHtml } from './schema.mjs';
+import { cardHtml, cardPublicData } from './schema.mjs';
 
 const usage = 'Node.js 18+ · node telegram/send-widget.mjs CHAT_ID\n' +
   'Укажите числовой ID личного чата с ботом и задайте TELEGRAM_BOT_TOKEN в окружении.';
@@ -46,7 +46,7 @@ async function send() {
   const message = await call('sendWidget', {
     chat_id: chatId,
     html,
-    caption: 'Профкурс · карьерный подбор', width: 320, height: 540, allow_queries: true
+    caption: 'Профкурс · карьерный подбор', public_data: cardPublicData, allow_queries: true
   });
   console.log(`Виджет отправлен. ID сообщения: ${message.message_id}`);
 }

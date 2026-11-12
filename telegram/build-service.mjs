@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
-import { cardHtml, sectorsOfInterest } from "./schema.mjs";
+import { cardHtml, cardPublicData, questionOptions, questions, sectorsOfInterest } from "./schema.mjs";
 import { choices } from "../docs/options.js";
 
 const paths = ["../docs/options.js", "schema.mjs", "bot.mjs", "../api/worker.mjs", "widget.html"];
@@ -8,6 +8,7 @@ const [catalog,schema,bot,worker,template] = await Promise.all(paths.map(path=>r
 const html=cardHtml(template);
 const size=deflateSync(html,{level:9}).length;
 if (size>4096 || Buffer.byteLength(html)>32768) throw Error("Виджет превышает лимит Telegram.");
+if ([cardPublicData,...questions.map((_, i)=>JSON.stringify({items:questionOptions(i)}))].some(data=>Buffer.byteLength(data)>1024)) throw Error("Данные экрана превышают лимит Telegram.");
 for (const [,values] of sectorsOfInterest) {
   const data=JSON.stringify({items:values.map(name=>[choices.interests.indexOf(name),name])});
   if(Buffer.byteLength(data)>1024) throw Error("Список не помещается в ответ Telegram.");

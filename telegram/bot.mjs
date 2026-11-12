@@ -1,5 +1,5 @@
 import { choices } from "../docs/options.js";
-import { cardHtml, decodeAnswers, sectorsOfInterest } from "./schema.mjs";
+import { cardHtml, cardPublicData, decodeAnswers, questionOptions, sectorsOfInterest } from "./schema.mjs";
 import cardTemplate from "./widget.html";
 
 const ownerBot = "prof0bot";
@@ -86,6 +86,10 @@ async function handleQuery(query, token, env, generate, allowed) {
   if (query.chat?.type!=="private" || query.from?.id!==chatId || !Number.isSafeInteger(messageId) || query.type?.type!=="data")
     return answer({error:"Откройте анкету в личном чате с @prof0bot."});
   const args=String(query.data||"").split(":");
+  if (args[0]==="q" && args.length===2 && /^\d{1,2}$/.test(args[1])) {
+    const items=questionOptions(Number(args[1]));
+    if (items) return answer({items});
+  }
   if (args[0]==="i" && args.length===2 && /^\d{1,2}$/.test(args[1])) {
     const entry=sectorsOfInterest[Number(args[1])];
     if (entry) return answer({items:entry[1].map(name=>[choices.interests.indexOf(name),name])});
@@ -156,7 +160,7 @@ export async function handleTelegram(request, env, ctx, generate, allowed) {
     const startKey="telegram/start/"+await digest(String(chat));
     const last=await env.CARD_DATA.get(startKey);
     if (!last || Number(await last.text())!==update.update_id) {
-      await telegramCall(token,"sendWidget",{chat_id:chat,html:cardMarkup,allow_queries:true,width:320,height:540,caption:"Профкурс · карьерный подбор"});
+      await telegramCall(token,"sendWidget",{chat_id:chat,html:cardMarkup,allow_queries:true,public_data:cardPublicData,caption:"Профкурс · карьерный подбор"});
       await env.CARD_DATA.put(startKey,String(update.update_id));
     }
   }

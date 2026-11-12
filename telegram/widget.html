@@ -1,88 +1,143 @@
 <style>
-body{padding:12px;margin:0}small{color:var(--tg-theme-hint-color)}h3{margin:7px 0}p{margin:7px 0;line-height:1.3}button{min-height:32px;margin:2px;padding:5px 9px}#choices button{display:block;width:100%;text-align:left}#nav{margin-top:5px}
+*{box-sizing:border-box}
+body{margin:0;padding:0;color-scheme:light dark;background:light-dark(#f3f6f1,#152421);color:light-dark(#173632,#edf5e9);font:15px/1.3 system-ui}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0c434c;color:#eef7e6;padding:13px 16px}
+small{display:block;color:#c2dbce;font-size:12px;font-weight:600}
+h3{font-size:19px;margin:3px 0 8px}
+.track{height:3px;background:#42676b;width:100%;border-radius:2px}
+#progress{height:3px;background:#d4f6ac}
+svg{width:66px;height:66px;flex:none}
+main{padding:14px}
+h2{font-size:22px;line-height:1.13;letter-spacing:-.5px;margin:0 0 10px}
+p{margin:0 0 10px;color:light-dark(#506560,#c6d5ce);font-size:14px}
+p:empty{display:none}
+#choices{display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
+#choices.scale{grid-template-columns:repeat(2,minmax(0,1fr))}
+button{font:600 15px/1.22 system-ui;color:inherit;cursor:pointer;min-width:0;white-space:normal;overflow-wrap:anywhere;border:1px solid light-dark(#c9d6cd,#425d52);border-radius:10px}
+#choices button{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:9px 12px;background:light-dark(#fdfefb,#20352e);text-align:left}
+#choices button:after{content:'›';margin-left:auto;color:light-dark(#507166,#b5c7ba)}
+.start svg{width:28px;height:28px;padding:5px;border-radius:7px;background:light-dark(#e5eee6,#344b40)}
+#choices.start button:after{content:'○'}
+#choices .selected{border-color:light-dark(#155b4c,#bfe69e);background:light-dark(#e1f1dd,#294b38)}
+#choices button.selected:after{content:'✓'}
+footer,nav{display:flex;flex-wrap:wrap;gap:6px}
+footer button,nav button{padding:8px 12px;min-height:36px;background:transparent}
+footer:not(:empty),nav:not(:empty){margin-top:9px}
+.primary{background:#155b4c;color:white;flex:1;border-color:#155b4c}
+@media(max-width:260px){header,main{padding:9px}svg{width:45px;height:45px}h2{font-size:19px}#choices button{padding:7px 9px}}
 </style>
-<small id="label">Профкурс</small><h3 id="title">Подбор профессий</h3><p id="text"></p><div id="choices"></div><div id="nav"></div>
+<header><div><small id="label">Профкурс</small><h3 id="stage"></h3><div class="track"><div id="progress"></div></div></div>
+<svg viewBox="0 0 80 80" aria-hidden="true"><g fill="none" stroke="#83aba5"><circle cx="40" cy="40" r="36" stroke-dasharray="1 4"/><circle cx="40" cy="40" r="30"/><circle cx="40" cy="40" r="18" opacity=".5"/><path d="M40 4v72M4 40h72" opacity=".4"/></g><g id="needle"><path d="M40 10l7 30-7 3-7-3z" fill="#ffaf82"/><path d="M33 40l7 30 7-30-7 3z" fill="#d4f6ac"/></g><circle cx="40" cy="40" r="3" fill="#fff"/></svg></header>
+<main><h2 id="title"></h2><p id="text"></p><div id="choices"></div><nav id="pages"></nav><footer id="nav"></footer></main>
 <script>
-const Q=__QUESTIONS__,groups=__GROUPS__,W=window.TelegramWidget;
+const W=window.TelegramWidget, catalog=JSON.parse(W.publicData), options=__OPTIONS__;
+const {titles,stages}=catalog, end=titles.length;
+options[2]=catalog.age;
 const $=id=>document.getElementById(id);
-let step=0, answers=[], interests=[], offset=0, group=-1, list=[], role=-1, section=-1, detail='', status='', job='', busy=false, serial=0;
-const perPage=3;
-try {
- const saved=JSON.parse(localStorage.getItem('quiz')||'null');
- if(saved){step=saved.step;answers=saved.answers;interests=saved.interests;job=saved.job}
-} catch(e){}
-function save(){try{localStorage.setItem('quiz',JSON.stringify({step,answers,interests,job}))}catch(e){}}
-function state(){try{return JSON.parse(W.chatData||'null')}catch(e){return null}}
-function btn(where,text,fn){const b=document.createElement('button');b.textContent=text;b.onclick=fn;$(where).appendChild(b)}
-function go(n){step=n;offset=0;group=-1;status='';save();draw()}
-function reset(){answers=[];interests=[];job='';role=-1;section=-1;go(0)}
-function paged(items,action,multi){
- const end=Math.min(offset+perPage,items.length);
- for(let i=offset;i<end;i++){const item=items[i];btn('choices',(multi&&interests.includes(item[0])?'✓ ':'')+(multi?item[1]:item),()=>action(i))}
- if(offset)btn('nav','‹ Ещё',()=>{offset-=perPage;draw()});
- if(end<items.length)btn('nav','Ещё ›',()=>{offset+=perPage;draw()});
+let model={step:0,answers:[],interests:[],job:''};
+try{Object.assign(model,JSON.parse(localStorage.getItem('quiz')));if(model.items)options[model.step]=model.items}catch{}
+let page=0, group=-1, list=[], role=-1, part=0, detail='', note='', busy=false;
+const sections=['Почему подходит','Рабочий день','Специализации','С чего начать'];
+function save(){try{localStorage.setItem('quiz',JSON.stringify({...model,items:options[model.step]}))}catch{}}
+function state(){return JSON.parse(W.chatData||'null')||{}}
+function button(where,label,action,style=''){
+ const b=document.createElement('button');
+ b.textContent=label;b.className=style;b.onclick=()=>{if(!busy)action()};$(where).appendChild(b);return b;
 }
-async function ask(data,done){
- if(busy)return;
- const id=++serial;busy=true;status='Загрузка…';draw();
- try{const a=await W.request(data);if(id!==serial)return;const v=JSON.parse(a.result);if(v.error)throw Error(v.error);status='';done(v)}
- catch(e){if(id===serial)status=e.message&&e.name==='Error'?e.message:'Не удалось загрузить. Попробуйте снова.'}
- finally{if(id===serial){busy=false;save();draw()}}
+function next(label,action){return button('nav',label,action,'primary')}
+function go(step){model.step=step;page=0;group=-1;role=-1;note='';save();draw()}
+async function request(key,apply){
+ busy=true;note='Загрузка…';$('text').textContent=note;
+ try{const reply=JSON.parse((await W.request(key)).result);if(reply.error)throw Error(reply.error);note='';apply(reply)}
+ catch(e){note=e.name==='Error'?e.message:'Попробуйте ещё раз.'}
+ finally{busy=false;save();draw()}
+}
+function openStep(i){
+ if(i>=end||options[i])return go(i);
+ request('q:'+i,({items})=>{options[i]=items;go(i)});
+}
+function pageOf(items,display,count){
+ const pages=Math.ceil(items.length/count);
+ page=Math.min(page,Math.max(0,pages-1));
+ items.slice(page*count,(page+1)*count).forEach((value,index)=>display(value,index+page*count));
+ if(pages>1){
+  if(page)button('pages','‹',()=>{page--;draw()});
+  if(page+1<pages)button('pages','Ещё · '+(page+1)+'/'+pages+' ›',()=>{page++;draw()});
+ }
 }
 function submit(){
- if(!job)job=Date.now().toString(36);
- const wire=Q.map((_,i)=>(answers[i]||0).toString(36)).join('');
- save();ask('s:'+job+':'+wire+':'+interests.map(x=>x.toString(36)).join('.'),()=>{step=Q.length+1;save()});
+ const m=model;if(!m.job)m.job=Date.now().toString(36);
+ save();const values=titles.map((_,i)=>(m.answers[i]||0).toString(36)).join('');
+ request('s:'+m.job+':'+values+':'+m.interests.map(x=>x.toString(36)).join('.'),()=>go(end+1))
 }
-const parts=['Почему подходит','Рабочий день','Специализации','С чего начать'];
-function showPart(r,p){ask('r:'+job+':'+r+':'+p,v=>{role=r;section=p;detail=v.text})}
+function details(r,p){request('r:'+model.job+':'+r+':'+p,reply=>{role=r;part=p;detail=reply.text;page=0})}
 function draw(){
- const data=state();$('choices').replaceChildren();$('nav').replaceChildren();$('text').textContent=status;
- $('label').textContent='Профкурс';
- if(step>Q.length && data && data.job===job && data.titles){
-   $('title').textContent=role<0?'Ваши три профессии':data.titles[role];
-   if(busy)return;
-   if(role<0){
-     data.titles.forEach((t,i)=>btn('choices',t,()=>showPart(i,0)));
-     btn('choices','Как совместить интересы',()=>showPart(3,0));
-     if(section===0&&detail)$('text').textContent=detail;
-     btn('nav','Пройти заново',()=>ask('x:'+job,reset));
-   }else{
-     if(role===3)$('title').textContent='Как совместить интересы';
-     $('text').textContent=status||detail;
-     if(role!==3)parts.forEach((t,i)=>{if(i!==section)btn('choices',t,()=>showPart(role,i))});
-     btn('nav','К профессиям',()=>{role=-1;section=-1;detail='';status='';draw()});
-   }
-   return;
+ const {step,answers,interests,job}=model, data=state();
+ const stage=[0,0,0,1,2,3,3,3,4,4,4,5,5][step]??5;
+ const slim=matchMedia('(max-width:260px)').matches;
+ $('label').textContent='Профкурс · '+(stage+1)+' / 6';
+ $('stage').textContent=step>=end?'Ваша подборка':stages[stage];
+ $('progress').style.width=(step>=end?100:(step+1)*100/end)+'%';
+ $('needle').setAttribute('transform','rotate('+(24+stage*46)+' 40 40)');
+ $('choices').replaceChildren();$('pages').replaceChildren();$('nav').replaceChildren();
+ $('choices').className='';
+ $('text').textContent=note;
+ if(step>end && data.job===job && data.titles){
+  $('title').textContent=role<0?'Три профессии для вас':(data.titles[role]||'Как сочетать интересы');
+  if(role<0){
+   pageOf(data.titles,(title,i)=>button('choices',title,()=>details(i,0)),slim?2:3);
+   button('choices','Как сочетать интересы',()=>details(3,0));
+   button('nav','Пройти заново',()=>request('x:'+job,()=>{model={step:0,answers:[],interests:[],job:''};go(0)}));
+  }else{
+   const chunks=detail.match(/.{1,145}(?:\s|$)|\S{1,145}/gu)||[''];
+   pageOf(chunks,text=>{$('text').textContent=note||text},1);
+   if(role<3)sections.forEach((name,i)=>{if(part!==i)button('choices',name,()=>details(role,i))});
+   button('nav','К профессиям',()=>{role=-1;page=0;draw()});
+  }
+  return;
  }
- if(step>=Q.length){
-   const waiting=step>Q.length;
-   $('title').textContent=waiting?'Подбираем профессии':'Получить подборку?';
-   $('text').textContent=status||(waiting?'Результат появится здесь.':'Ответы получит DeepSeek. В карточке появятся три профессии.');
-   if(!busy){
-     if(waiting){if(data&&data.job===job&&data.error)$('text').textContent=data.error;btn('nav','Проверить результат',()=>ask('p:'+job,v=>{if(v.error)status=v.error;else if(v.wait)status='Подбор ещё идёт.'}))}
-     if(!waiting||(data&&data.job===job&&data.error))btn('nav',waiting?'Повторить':'Подобрать профессии',()=>{if(waiting)job='';submit()});
-     btn('nav','К ответам',()=>{job='';go(Q.length-1)});
-   }
-   return;
+ if(step>=end){
+  const waiting=step>end;
+  $('title').textContent=waiting?'Подбираем профессии':'Готовы к подбору?';
+  $('text').textContent=note||data.error||(waiting?'Результат появится здесь.':'DeepSeek подберёт по вашим ответам три профессии.');
+  button('nav','К ответам',()=>{model.job='';openStep(end-1)});
+  if(waiting&&!data.error)next('Проверить',()=>request('p:'+job,v=>{if(v.wait)note='Подбор ещё идёт.'}));
+  else next('Подобрать профессии',submit);
+  return;
  }
- $('label').textContent='Профкурс · '+(step+1)+' из '+Q.length;
- $('title').textContent=Q[step][0];
- if(busy)return;
- if(step===3){
-   $('text').textContent=status||('Выберите до четырёх занятий · '+interests.length+' из 4');
-   if(group<0)paged(groups,i=>ask('i:'+i,v=>{group=i;list=v.items;offset=0}),false);
-   else{paged(list,i=>{const n=list[i][0];status='';if(interests.includes(n))interests=interests.filter(x=>x!==n);else if(interests.length<4)interests.push(n);else status='Уже выбрано четыре занятия.';save();draw()},true);
-     btn('nav','К сферам',()=>{group=-1;offset=0;draw()});}
-   if(interests.length)btn('nav','Дальше',()=>go(step+1));
- }else{paged(Q[step][1],i=>{answers[step]=i;go(step+1)},false)}
- if(step)btn('nav','Назад',()=>go(step-1));
+ const multi=step===3, nested=multi&&group>=0, values=nested?list:options[step];
+ $('title').textContent=nested?options[3][group]:titles[step];
+ if(!values){next('Загрузить варианты',()=>openStep(step));return}
+ const scale=[2,8,9].includes(step);
+ $('choices').className=scale?'scale':step===0?'start':'';
+ if(!note)$('text').textContent=multi?'Выбрано '+interests.length+' из 4':step===0?'Подберём три профессии по вашим интересам и ритму жизни.':'';
+ pageOf(values,(item,i)=>{
+  const selected=nested?interests.includes(item[0]):!multi&&answers[step]===i;
+  const choice=button('choices',nested?item[1]:item,()=>{
+   if(multi&&!nested)return request('i:'+i,reply=>{group=i;list=reply.items;page=0});
+   note='';
+   if(nested){
+    const id=item[0];
+    if(selected)model.interests=interests.filter(x=>x!==id);
+    else if(interests.length<4)interests.push(id);
+    else note='Уже выбрано четыре занятия.';
+   }else answers[step]=i;
+   save();draw();
+  },selected?'selected':'');
+  if(step===0){
+   const path=['M3 8h18v12H3z M8 8V5h8v3 M3 13h18','M12 6L3 4v14l9 2 9-2V4l-9 2v14','M12 2a10 10 0 1 0 .1 0 M16 7l-2 7-6 3 2-7z'][i];
+   choice.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+path+'" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'+item;
+  }
+ },scale?8:slim?3:4);
+ if(step)button('nav',nested?'К сферам':'Назад',()=>{if(nested){group=-1;page=0;draw()}else openStep(step-1)});
+ const advance=next('Дальше →',()=>openStep(step+1));
+ advance.disabled=multi?!interests.length:answers[step]==null;
+ advance.style.opacity=advance.disabled?'.47':'1';
 }
-W.onEvent('chatDataChanged',()=>{
+function sync(){
  const d=state();
- if(d&&d.job===job&&d.titles){step=Q.length+1;save()}
+ if(d.titles&&(d.job===model.job||(!model.job&&!model.answers.length))){model.job=d.job;model.step=end+1;save()}
  draw();
-});
-const initial=state();if(!job&&step===0&&initial&&initial.titles&&!answers.length){job=initial.job;step=Q.length+1}
-draw();W.ready();
+}
+W.onEvent('chatDataChanged',sync);sync();W.ready();
 </script>

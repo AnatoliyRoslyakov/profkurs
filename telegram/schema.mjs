@@ -17,6 +17,11 @@ export const questions = [
   ["immersion", "Насколько хотите погрузиться?", choices.immersion]
 ];
 export const sectorsOfInterest = Object.entries({ ...interestGroups, "Пока выбираю сферу": generalInterests });
+const stages = ["Отправная точка","Интересы","Сильная сторона","Рабочий день","Темп обучения","Глубина освоения"];
+export const cardPublicData = JSON.stringify({titles:questions.map(q=>q[1]), stages, age:questions[2][2]});
+export function questionOptions(index) {
+  return index === 3 ? sectorsOfInterest.map(([name])=>name) : questions[index]?.[2];
+}
 
 export function decodeAnswers(values, selected) {
   if (values.length !== questions.length || !/^[0-9a-z]+$/.test(values) || !/^[0-9a-z]{1,2}(\.[0-9a-z]{1,2}){0,3}$/.test(selected)) return null;
@@ -34,6 +39,5 @@ export function decodeAnswers(values, selected) {
 }
 
 export function cardHtml(template) {
-  return template.replace("__QUESTIONS__", JSON.stringify(questions.map(([, title, labels]) => [title, labels])))
-    .replace("__GROUPS__", JSON.stringify(sectorsOfInterest.map(([name]) => name)));
+  return template.replace("__OPTIONS__", JSON.stringify(Object.fromEntries([0,8,9].map(i=>[i,questionOptions(i)]))));
 }
